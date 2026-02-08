@@ -1,13 +1,17 @@
 "use client";
 
-import { HomeKeyframeLayout } from "@/components/home/HomeKeyframeLayout";
 import { Hero } from "@/components/sections/Hero";
 import { ServicesFeatured } from "@/components/sections/ServicesFeatured";
+import { VideoScrollLayout } from "@/components/services/VideoScrollLayout";
+import { VIDEO_STATS } from "@/lib/videoStats";
 import { ArrowUpRight, Plus } from "lucide-react";
 
 export default function Home() {
   return (
-    <HomeKeyframeLayout>
+    <VideoScrollLayout
+      videoSrc={VIDEO_STATS.homepage.src}
+      videoStats={VIDEO_STATS.homepage}
+    >
       <Hero />
       <ServicesFeatured />
       
@@ -184,6 +188,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-    </HomeKeyframeLayout>
+    </VideoScrollLayout>
   );
 }

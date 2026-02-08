@@ -4,7 +4,7 @@
 export const VIDEO_STATS = {
     homepage: {
         src: '/images/home-ui/hp.mp4',
-        fallback: '/images/home-ui/ezgif-frame-001.png', // Use first keyframe
+        fallback: '/images/home-ui/fallback.png', // Use first keyframe
         duration: 5.041667,
         frameRate: 24,
         totalFrames: 121,
