@@ -1,0 +1,193 @@
+"use client";
+
+import { useAdminSidebar } from "@/components/admin/AdminSidebarContext";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import {
+    ChevronLeft,
+    ChevronRight,
+    FileText,
+    FolderOpen,
+    LayoutDashboard,
+    LogOut,
+    MessageSquare,
+    Settings,
+    Users
+} from "lucide-react";
+import NextImage from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+
+const SIDEBAR_ITEMS = [
+  { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: "Blog", href: "/admin/blog", icon: FileText },
+  { label: "Projects", href: "/admin/projects", icon: FolderOpen },
+  { label: "Files", href: "/admin/files", icon: FolderOpen }, 
+  { label: "Inbox", href: "/admin/inbox", icon: MessageSquare },
+  { label: "Staff", href: "/admin/staff", icon: Users },
+  { label: "Settings", href: "/admin/settings", icon: Settings },
+];
+
+const pulseAnimation = {
+  animate: {
+    boxShadow: ["0 0 0px rgba(212,175,55,0.2)", "0 0 15px rgba(212,175,55,0.6)", "0 0 0px rgba(212,175,55,0.2)"],
+    borderColor: ["rgba(212,175,55,0.3)", "rgba(212,175,55,1)", "rgba(212,175,55,0.3)"]
+  },
+  transition: { duration: 3, repeat: Infinity, ease: "easeInOut" as const }
+};
+
+export function AdminSidebar() {
+  const { isMobileOpen, isCollapsed, toggleCollapse } = useAdminSidebar();
+  const [isMounted, setIsMounted] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Determine effective width based on responsiveness
+  // Mobile (<768px): Controlled by isMobileOpen. If open -> always collapsed (80px). If closed -> 0px.
+  // Desktop (>=768px): Controlled by isCollapsed. If collapsed -> 80px. If expanded -> 256px.
+  const isMobile = isMounted && typeof window !== 'undefined' && window.innerWidth < 768;
+  
+  // Initial width should be collapsed (80px) to prevent flash
+  // On SSR/before mount: use 80px (collapsed) to prevent flash
+  const currentWidth = !isMounted 
+      ? 80 // SSR: render collapsed to prevent flash
+      : isMobile 
+          ? (isMobileOpen ? 80 : 0) 
+          : (isCollapsed ? 80 : 256);
+
+  // Override hidden state for rendering
+  const isHidden = isMobile && !isMobileOpen;
+
+  return (
+    <motion.aside
+      initial={false}
+      animate={{ 
+         width: currentWidth
+      }}
+      transition={{ 
+         width: { type: "spring", stiffness: 300, damping: 30 }
+      }}
+      className={cn(
+        "relative ml-[5px] my-[5px] mr-0 h-[calc(100vh-10px)] sticky top-[5px] flex flex-col border-r-0 border border-white/20 dark:border-white/10 bg-white/30 dark:bg-white/5 backdrop-blur-xl z-50 rounded-[10px]",
+        "max-md:w-0", // CSS-only: Hidden on mobile by default until JS hydrates
+        isHidden && "border-none bg-transparent pointer-events-none" // Hide border/bg when hidden
+      )}
+    >
+      {/* Container for content that needs to be hidden/clipped when width is 0 */}
+      <div className={cn("flex flex-col h-full overflow-hidden", isHidden && "opacity-0")}>
+        {/* Brand */}
+        <div className={cn("h-20 flex items-center px-6 relative", isCollapsed ? "justify-center" : "justify-start pl-4")}>
+          <div className="relative w-full h-full flex items-center">
+              {/* Expanded Logo */}
+              <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: isCollapsed ? 0 : 1 }}
+                  transition={{ duration: 0.2 }}
+                  className={cn("absolute inset-0 flex items-center justify-start", isCollapsed && "pointer-events-none")}
+              >
+                  <motion.div 
+                      animate={pulseAnimation.animate}
+                      transition={pulseAnimation.transition}
+                      className="relative w-32 h-10 border border-gold/30 rounded-[10px] overflow-hidden bg-black/20"
+                  >
+                      <NextImage src="/logos/logo-dark-full.png" alt="Xinteck" fill className="object-cover" priority />
+                  </motion.div>
+              </motion.div>
+
+              {/* Collapsed Logo */}
+              <motion.div
+                  initial={{ opacity: 1 }}
+                  animate={{ opacity: isCollapsed ? 1 : 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={cn("absolute inset-0 flex items-center justify-center", !isCollapsed && "pointer-events-none")}
+              >
+                  <motion.div 
+                      animate={pulseAnimation.animate}
+                      transition={pulseAnimation.transition}
+                      className="relative w-10 h-10 border border-gold/30 rounded-full overflow-hidden bg-black/20 p-1.5 shrink-0 aspect-square"
+                  >
+                       <NextImage src="/logos/logo-dark.png" alt="X" fill className="object-contain" />
+                  </motion.div>
+              </motion.div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1 scrollbar-none">
+          {SIDEBAR_ITEMS.map((item) => {
+            const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));
+            return (
+              <Link 
+                key={item.href} 
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-3 rounded-[10px] transition-all group relative overflow-hidden",
+                  isCollapsed && "justify-center",
+                  isActive 
+                    ? "bg-gold text-black font-bold shadow-lg shadow-gold/20" 
+                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                )}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="activeNavParams"
+                    className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-50"
+                    transition={{ duration: 0.2 }}
+                  />
+                )}
+                
+                <div className={cn("relative z-10", isActive ? "text-black" : "text-white/60 group-hover:text-white")}>
+                  <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                </div>
+
+                {!isCollapsed && (
+                  <span className="font-medium whitespace-nowrap relative z-10">
+                    {item.label}
+                  </span>
+                )}
+                
+                {!isCollapsed && isActive && (
+                  <ChevronRight size={16} className="ml-auto opacity-50" />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+        
+        {/* Footer / Theme & Logout */}
+        <div className="p-3 border-t border-white/10 mx-2 mb-2 space-y-2">
+          {/* Update Theme Toggle Placement */}
+          <div className={cn("flex items-center", isCollapsed ? "flex-col justify-center gap-2" : "gap-3 pl-3")}>
+               <ThemeToggle /> 
+               {!isCollapsed && <span className="text-sm font-medium text-white/60">Theme</span>}
+          </div>
+
+          <button className={cn(
+            "flex items-center gap-3 w-full px-3 py-3 rounded-[10px] transition-all font-bold shadow-lg",
+            isCollapsed ? "justify-center bg-gold/10 text-gold hover:bg-gold hover:text-black" : "bg-gold text-black hover:bg-white hover:scale-[1.02] active:scale-[0.98]"
+          )}>
+            <LogOut size={20} />
+            {!isCollapsed && <span className="font-bold">Logout</span>}
+          </button>
+        </div>
+      </div>
+
+      {/* Collapse Toggle - HIDDEN ON MOBILE */}
+      <button 
+        onClick={toggleCollapse}
+        className={cn(
+           "absolute -right-3 top-10 bg-gold text-black p-1.5 rounded-full shadow-lg hover:scale-110 transition-transform z-[60] border-2 border-black/50 pointer-events-auto",
+           "hidden md:flex" // Hide on mobile, show on desktop
+        )}
+      >
+        {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
+
+    </motion.aside>
+  );
+}

@@ -1,0 +1,360 @@
+// ═══════════════════════════════════════════════════════════════
+// XINTECK DATABASE SCHEMA
+// Prisma + PostgreSQL
+// ═══════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUTHENTICATION & AUTHORIZATION
+// ═══════════════════════════════════════════════════════════════
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  passwordHash   String
+  name           String
+  avatar         String?
+  role           Role       @default(SUPPORT_STAFF)
+  status         UserStatus @default(ACTIVE)
+  lastActiveAt   DateTime?
+
+  // Relations
+  sessions    Session[]
+  blogPosts   BlogPost[]
+  projects    Project[]
+  auditLogs   AuditLog[]
+  mediaFiles  MediaFile[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+enum Role {
+  SUPER_ADMIN   // Full system access
+  ADMIN         // IT personnel, admin panel access
+  SUPPORT_STAFF // IT support, limited admin access
+}
+
+enum UserStatus {
+  ACTIVE
+  AWAY
+  SUSPENDED
+  DELETED
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTENT MANAGEMENT - BLOG
+// ═══════════════════════════════════════════════════════════════
+
+model BlogPost {
+  id            String        @id @default(cuid())
+  slug          String        @unique
+  title         String
+  excerpt       String?
+  content       String        @db.Text
+  featuredImage String?
+
+  status ContentStatus @default(DRAFT)
+  views  Int           @default(0)
+
+  // Relations
+  categoryId String?
+  category   BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  authorId   String
+  author     User          @relation(fields: [authorId], references: [id])
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? // Soft delete
+
+  @@index([slug])
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([status])
+  @@index([publishedAt])
+}
+
+model BlogCategory {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  slug        String     @unique
+  description String?
+  color       String? // For UI badge display
+  posts       BlogPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTENT MANAGEMENT - PROJECTS / PORTFOLIO
+// ═══════════════════════════════════════════════════════════════
+
+model Project {
+  id             String          @id @default(cuid())
+  slug           String          @unique
+  title          String
+  client         String?
+  description    String?         @db.Text
+  url            String?
+  coverImage     String?
+
+  category       ProjectCategory @default(WEB_DEV)
+  status         ProjectStatus   @default(IN_REVIEW)
+  completionDate DateTime?
+
+  // Relations
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete
+
+  @@index([slug])
+  @@index([status])
+  @@index([category])
+  @@index([authorId])
+}
+
+enum ProjectCategory {
+  WEB_DEV
+  MOBILE_APP
+  UI_UX_DESIGN
+  CUSTOM_SOFTWARE
+  CONSULTING
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  IN_REVIEW
+  ARCHIVED
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SERVICES
+// ═══════════════════════════════════════════════════════════════
+
+model Service {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  subName          String
+  price            String?
+  description      String
+  themeColor       String
+  gradient         String
+  features         String[]
+  stats            Json     // [{ label: "", val: "" }]
+  section1         Json     // { title: "", subtitle: "" }
+  section2         Json
+  section3         Json
+  section4         Json
+  detailsSection   Json     // { title: "", description: "", imageAlt: "" }
+  freshnessSection Json     // { title: "", description: "" }
+  buyNowSection    Json     // { price: "", unit: "", processingParams: [], deliveryPromise: "", returnPolicy: "" }
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMMUNICATIONS - CONTACT SUBMISSIONS
+// ═══════════════════════════════════════════════════════════════
+
+model ContactSubmission {
+  id      String  @id @default(cuid())
+  name    String
+  email   String
+  service String?
+  budget  String?
+  message String  @db.Text
+
+  status     MessageStatus @default(UNREAD)
+  isStarred  Boolean       @default(false)
+  isArchived Boolean       @default(false)
+
+  // For replies
+  replies ContactReply[]
+
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([email])
+  @@index([isArchived])
+  @@index([createdAt])
+}
+
+model ContactReply {
+  id           String            @id @default(cuid())
+  submissionId String
+  submission   ContactSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  content      String            @db.Text
+  sentAt       DateTime          @default(now())
+  sentBy       String? // Admin user email/name
+}
+
+enum MessageStatus {
+  UNREAD
+  READ
+  REPLIED
+  ARCHIVED
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMMUNICATIONS - NEWSLETTER
+// ═══════════════════════════════════════════════════════════════
+
+model NewsletterSubscriber {
+  id       String  @id @default(cuid())
+  email    String  @unique
+  isActive Boolean @default(true)
+  source   String? // Where they subscribed from
+
+  createdAt      DateTime  @default(now())
+  unsubscribedAt DateTime?
+
+  @@index([email])
+  @@index([isActive])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MEDIA MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+model MediaFile {
+  id           String  @id @default(cuid())
+  name         String
+  originalName String
+  mimeType     String
+  size         Int // Bytes
+  url          String
+  publicId     String? // Cloudinary public ID
+
+  folder  String  @default("general")
+  altText String?
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime? // Soft delete
+
+  @@index([folder])
+  @@index([mimeType])
+  @@index([uploadedById])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURATION & SETTINGS
+// ═══════════════════════════════════════════════════════════════
+
+model SiteSetting {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  value       String      @db.Text
+  type        SettingType @default(STRING)
+  category    String      @default("general")
+  isPublic    Boolean     @default(false) // Can be exposed to frontend?
+  description String?
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@index([category])
+  @@index([key])
+}
+
+model SecretConfig {
+  id             String @id @default(cuid())
+  key            String @unique
+  encryptedValue String @db.Text // AES-256-GCM encrypted
+  iv             String // Initialization vector
+
+  description String?
+  lastRotated DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUDITING & OBSERVABILITY
+// ═══════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id       String  @id @default(cuid())
+  action   String // e.g., "user.login", "post.create", "settings.update"
+  entity   String? // e.g., "BlogPost", "User", "Setting"
+  entityId String?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  metadata  Json? // Additional context (old value, new value, etc.)
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}

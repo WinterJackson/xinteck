@@ -1,0 +1,18 @@
+---
+title: "Scaling Fintech: Lessons from 10k TPS"
+excerpt: "How we architected a global payment system using Go and Kubernetes while maintaining 99.99% uptime."
+date: "Nov 28, 2025"
+author: "Marcus Aurelius"
+readTime: "12 min read"
+tag: "Case Study"
+---
+
+Scaling a fintech application to handle 10,000 transactions per second (TPS) requires more than just adding more servers. It requires a fundamental shift in how you handle state and consistency.
+
+### The Architecture
+We chose a **microservices architecture** using Go for its extreme efficiency and Kubernetes for its orchestration capabilities.
+
+- **Storage**: We utilized a combination of PostgreSQL for relational data and Redis for high-speed caching of session data.
+- **Messaging**: RabbitMQ was the backbone of our asynchronous processing, ensuring no transaction was lost even during peak traffic.
+
+The result was a system that not only handled the target load but surpassed it, peaking at 14k TPS during stress testing.
