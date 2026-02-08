@@ -5,6 +5,8 @@ export const FALLBACK_SERVICES: Service[] = [
     {
         id: "fallback-1",
         slug: "web-development",
+        isActive: true,
+        sortOrder: 1,
         name: "Web Development",
         subName: "Digital Excellence.",
         price: "Custom",
@@ -39,6 +41,8 @@ export const FALLBACK_SERVICES: Service[] = [
     {
         id: "fallback-2",
         slug: "mobile-app-development",
+        isActive: true,
+        sortOrder: 2,
         name: "Mobile Apps",
         subName: "Native Performance.",
         price: "Custom",
@@ -73,6 +77,8 @@ export const FALLBACK_SERVICES: Service[] = [
     {
         id: "fallback-3",
         slug: "custom-software-development",
+        isActive: true,
+        sortOrder: 3,
         name: "Custom Software",
         subName: "Tailored Solutions.",
         price: "Enterprise",
@@ -107,6 +113,8 @@ export const FALLBACK_SERVICES: Service[] = [
     {
         id: "fallback-4",
         slug: "ui-ux-design",
+        isActive: true,
+        sortOrder: 4,
         name: "UI/UX Design",
         subName: "User Centric.",
         price: "Custom",
@@ -141,6 +149,8 @@ export const FALLBACK_SERVICES: Service[] = [
     {
         id: "fallback-5",
         slug: "cloud-devops",
+        isActive: true,
+        sortOrder: 5,
         name: "Cloud & DevOps",
         subName: "Infrastructure.",
         price: "Retainer",
