@@ -16,7 +16,7 @@ const PUBLIC_AUTH_ROUTES = [
 
 import { authLimiter, contactLimiter, newsletterLimiter } from '@/lib/rate-limit';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
     // Fix: Cast to any because NextRequest type might miss 'ip' in some versions
     const ip = (request as any).ip || request.headers.get('x-forwarded-for') || '127.0.0.1';
