@@ -1,12 +1,16 @@
-"use client";
-
 import { Hero } from "@/components/sections/Hero";
 import { ServicesFeatured } from "@/components/sections/ServicesFeatured";
 import { VideoScrollLayout } from "@/components/services/VideoScrollLayout";
+import { getFeaturedProject } from "@/lib/public-data";
 import { VIDEO_STATS } from "@/lib/videoStats";
 import { ArrowUpRight, Plus } from "lucide-react";
+import Link from "next/link";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const featuredProject = await getFeaturedProject();
+
   return (
     <VideoScrollLayout
       videoSrc={VIDEO_STATS.homepage.src}
@@ -16,6 +20,7 @@ export default function Home() {
       <ServicesFeatured />
       
       {/* Featured Project Teaser */}
+      {featuredProject && (
       <section className="py-12 md:py-24 px-6 overflow-hidden">
         <div className="max-w-7xl mx-auto">
           <div className="group relative bg-white/30 dark:bg-black/80 backdrop-blur-xl border border-primary/10 p-1 md:p-2 rounded-[10px] overflow-hidden shadow-lg">
@@ -32,36 +37,24 @@ export default function Home() {
                 </div>
                 
                 <h3 className="text-3xl md:text-5xl font-black tracking-tighter leading-tight">
-                  REVOLUTIONIZING <br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-yellow-200">GLOBAL FINTECH.</span>
+                  {featuredProject.title.toUpperCase()}
                 </h3>
-                <p className="text-foreground/60 text-lg leading-relaxed max-w-md">
-                  We helped a leading financial institution scale their infrastructure
-                  to handle 10k transactions per second with 99.99% uptime.
+                <p className="text-foreground/60 text-lg leading-relaxed max-w-md line-clamp-3">
+                  {featuredProject.description}
                 </p>
                 
-                <div className="flex gap-4 pt-4">
-                    <div className="flex flex-col gap-1 border-l-2 border-primary/20 pl-4">
-                        <span className="text-2xl font-black text-foreground">10k+</span>
-                        <span className="text-xs text-foreground/40 uppercase font-bold">TPS Capped</span>
-                    </div>
-                    <div className="flex flex-col gap-1 border-l-2 border-primary/20 pl-4">
-                        <span className="text-2xl font-black text-foreground">-40%</span>
-                        <span className="text-xs text-foreground/40 uppercase font-bold">Latency</span>
-                    </div>
-                </div>
-
                 <div className="pt-4">
-                    <button className="px-8 py-3 bg-foreground text-background font-bold rounded-[10px] hover:bg-primary transition-colors flex items-center gap-2 group/btn">
+                    <Link href={`/portfolio/${featuredProject.slug}`} className="px-8 py-3 bg-foreground text-background font-bold rounded-[10px] hover:bg-primary transition-colors flex items-center gap-2 group/btn w-fit">
                     Read Case Study
                     <ArrowUpRight size={18} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
-                    </button>
+                    </Link>
                 </div>
               </div>
               
               <div className="flex-1 relative w-full aspect-square md:aspect-auto md:h-[400px]">
                 <div className="w-full h-full bg-secondary/10 rounded-[10px] border border-primary/10 flex items-center justify-center relative overflow-hidden group/image">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
+                  {/* Ideally show project image here */}
                   <span className="text-primary/10 font-black text-[10rem] select-none scale-150 group-hover/image:scale-100 transition-transform duration-700">01</span>
                 </div>
               </div>
@@ -69,6 +62,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Testimonials Section */}
       <section className="py-12 md:py-24 px-6 relative">

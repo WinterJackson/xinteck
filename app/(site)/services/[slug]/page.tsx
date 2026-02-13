@@ -1,22 +1,29 @@
-// Forces cache invalidation for Next.js build
 import { ServicePageClient } from "@/components/services/ServicePageClient";
-import { SERVICES_DATA } from "@/lib/services-data";
+import { getPublicService, getPublicServices } from "@/lib/public-data";
 import { notFound } from "next/navigation";
 
 // Generate static params for SSG
-export function generateStaticParams() {
-  return Object.keys(SERVICES_DATA).map((slug) => ({
-    slug,
+export async function generateStaticParams() {
+  const services = await getPublicServices();
+  return services.map((s) => ({
+    slug: s.slug,
   }));
 }
 
 export default async function ServiceDynamicPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const service = await getPublicService(slug);
 
-  // Verify slug validity on server
-  if (!SERVICES_DATA[slug as keyof typeof SERVICES_DATA]) {
+  if (!service) {
     notFound();
   }
 
-  return <ServicePageClient slug={slug} />;
+  // ServicePageClient currently expects 'slug' and uses SERVICES_DATA.
+  // We need to refactor ServicePageClient to accept "service data" directly.
+  // For now, let's look at ServicePageClient. It is a Client Component.
+  // We should pass the service object.
+  // But wait, ServicePageClient imports SERVICES_DATA.
+  // We must refactor ServicePageClient as well.
+  
+  return <ServicePageClient service={service} />;
 }

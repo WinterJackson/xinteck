@@ -1,7 +1,7 @@
 import { ProjectGrid } from "@/components/sections/ProjectGrid";
 import { VideoScrollLayout } from "@/components/services/VideoScrollLayout";
+import { getPublicProjects } from "@/lib/public-data";
 import { VIDEO_STATS } from "@/lib/videoStats";
-import { getAllFilesMetadata, ProjectMeta } from "@/lib/mdx";
 import Link from "next/link";
 
 export const metadata = {
@@ -9,8 +9,10 @@ export const metadata = {
   description: "Explore our portfolio of premium software solutions and digital experiences.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function PortfolioPage() {
-  const projects = await getAllFilesMetadata<ProjectMeta>("projects");
+  const projects = await getPublicProjects();
 
   return (
     <VideoScrollLayout videoSrc={VIDEO_STATS.portfolio.src} videoStats={VIDEO_STATS.portfolio}>

@@ -1,55 +1,125 @@
+import { INTERNAL_getSecret } from "@/actions/settings";
+import { logAudit } from "@/lib/audit";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { z } from "zod";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "re_123456789");
+
+// Remove static init
+// const resend = new Resend(process.env.RESEND_API_KEY || "re_123");
+
+
+const contactSchema = z.object({
+  name: z.string().min(2, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  service: z.string().optional(),
+  budget: z.string().optional(),
+  message: z.string().min(10, "Message must be at least 10 characters"),
+});
+
+import { NotificationService } from "@/lib/services/notification-service";
+import { NotificationPriority, NotificationType, Role } from "@prisma/client";
 
 export async function POST(req: Request) {
   try {
-    const data = await req.json();
-    const { name, email, service, budget, message } = data;
+    const rawData = await req.json();
 
-    // VALIDATION
-    if (!name || !email || !message) {
+    // 1. Validation
+    const validation = contactSchema.safeParse(rawData);
+
+    if (!validation.success) {
       return NextResponse.json(
-        { error: "Name, email, and message are required." },
+        { error: validation.error.issues[0].message },
         { status: 400 }
       );
     }
 
-    // RESEND INTEGRATION
-    if (process.env.RESEND_API_KEY) {
+    const { name, email, service, budget, message } = validation.data;
+
+    // 2. Database Transaction (Primary Source of Truth)
+    const submission = await prisma.contactSubmission.create({
+      data: {
+        name,
+        email,
+        service,
+        budget,
+        message,
+        ipAddress: req.headers.get("x-forwarded-for") || "unknown",
+        userAgent: req.headers.get("user-agent") || "unknown",
+      }
+    });
+
+    // 3. Audit Log
+    // Fail-safe (won't block response if fails inside logAudit)
+    await logAudit({
+      action: "contact.submission",
+      entity: "ContactSubmission",
+      entityId: submission.id,
+      metadata: { email, service }
+    });
+
+    // 4. Notification Broadcast (NEW)
+    // Alert Admins and Super Admins
+    try {
+      await NotificationService.broadcastToRoles({
+        roles: [Role.SUPER_ADMIN, Role.ADMIN],
+        title: "New Contact Inquiry",
+        message: `${name} has sent an inquiry regarding ${service || "General Inquiry"}.`,
+        type: NotificationType.INFO,
+        priority: NotificationPriority.HIGH,
+        link: `/admin/inbox?filter=unread`, // Deep link
+        metadata: { submissionId: submission.id, email }
+      });
+    } catch (e) {
+      console.error("Failed to broadcast notification:", e);
+    }
+
+    // 5. Resend Integration (Side Effect)
+    const resendApiKey = await INTERNAL_getSecret("RESEND_API_KEY");
+    const fromEmail = await INTERNAL_getSecret("RESEND_FROM_EMAIL");
+    const toEmail = await INTERNAL_getSecret("RESEND_TO_EMAIL");
+
+    if (resendApiKey) {
       try {
+        const resend = new Resend(resendApiKey);
+
         await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
-          to: [process.env.RESEND_TO_EMAIL || "admin@xinteck.com"], // Fallback should be your signup email for testing
+          from: fromEmail || "onboarding@resend.dev",
+          to: [toEmail || "admin@xinteck.com"],
           subject: `New Inquiry: ${name}`,
           text: `
             Name: ${name}
             Email: ${email}
-            Service: ${service}
-            Budget: ${budget}
+            Service: ${service || "Not specified"}
+            Budget: ${budget || "Not specified"}
             
             Message:
             ${message}
+            
+            Link: https://xinteck.com/admin/inbox/${submission.id}
           `,
         });
       } catch (err) {
         console.error("Resend Error:", err);
-        // We continue anyway so the user gets a positive feedback if the data was logged
+        // Log email failure to console but don't fail request since DB saved
       }
+    } else {
+      console.warn("RESEND_API_KEY missing, skipping email notification.");
     }
-
-
 
     // SUCCESS RESPONSE
     return NextResponse.json(
       {
         message: "Your inquiry has been launched into our orbit. Our engineers will reach out within 4 hours.",
-        status: "success"
+        status: "success",
+        id: submission.id
       },
       { status: 200 }
     );
+
   } catch (error) {
+    console.error("Contact API Error:", error);
     return NextResponse.json(
       { error: "The signal was lost. Please try again or contact us directly." },
       { status: 500 }

@@ -17,21 +17,23 @@ datasource db {
 // ═══════════════════════════════════════════════════════════════
 
 model User {
-  id             String     @id @default(cuid())
-  email          String     @unique
-  passwordHash   String
-  name           String
-  avatar         String?
-  role           Role       @default(SUPPORT_STAFF)
-  status         UserStatus @default(ACTIVE)
-  lastActiveAt   DateTime?
+  id                      String     @id @default(cuid())
+  email                   String     @unique
+  passwordHash            String
+  name                    String
+  avatar                  String?
+  role                    Role       @default(SUPPORT_STAFF)
+  status                  UserStatus @default(ACTIVE)
+  lastActiveAt            DateTime?
+  notificationPreferences Json? // { marketing: boolean, security: boolean, ... }
 
   // Relations
-  sessions    Session[]
-  blogPosts   BlogPost[]
-  projects    Project[]
-  auditLogs   AuditLog[]
-  mediaFiles  MediaFile[]
+  sessions      Session[]
+  blogPosts     BlogPost[]
+  projects      Project[]
+  auditLogs     AuditLog[]
+  mediaFiles    MediaFile[]
+  notifications Notification[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -43,8 +45,8 @@ model User {
 }
 
 enum Role {
-  SUPER_ADMIN   // Full system access
-  ADMIN         // IT personnel, admin panel access
+  SUPER_ADMIN // Full system access
+  ADMIN // IT personnel, admin panel access
   SUPPORT_STAFF // IT support, limited admin access
 }
 
@@ -75,11 +77,11 @@ model Session {
 // ═══════════════════════════════════════════════════════════════
 
 model BlogPost {
-  id            String        @id @default(cuid())
-  slug          String        @unique
+  id            String  @id @default(cuid())
+  slug          String  @unique
   title         String
   excerpt       String?
-  content       String        @db.Text
+  content       String  @db.Text
   featuredImage String?
 
   status ContentStatus @default(DRAFT)
@@ -95,6 +97,7 @@ model BlogPost {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime? // Soft delete
+  version     Int       @default(0)
 
   @@index([slug])
   @@index([categoryId])
@@ -128,13 +131,13 @@ enum ContentStatus {
 // ═══════════════════════════════════════════════════════════════
 
 model Project {
-  id             String          @id @default(cuid())
-  slug           String          @unique
-  title          String
-  client         String?
-  description    String?         @db.Text
-  url            String?
-  coverImage     String?
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  title       String
+  client      String?
+  description String? @db.Text
+  url         String?
+  coverImage  String?
 
   category       ProjectCategory @default(WEB_DEV)
   status         ProjectStatus   @default(IN_REVIEW)
@@ -147,6 +150,7 @@ model Project {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // Soft delete
+  version   Int       @default(0)
 
   @@index([slug])
   @@index([status])
@@ -174,29 +178,31 @@ enum ProjectStatus {
 // ═══════════════════════════════════════════════════════════════
 
 model Service {
-  id               String   @id @default(cuid())
-  slug             String   @unique
-  name             String
-  subName          String
-  price            String?
-  description      String
-  themeColor       String
-  gradient         String
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  subName     String
+  price       String?
+  description String
+  themeColor  String
+
   features         String[]
-  stats            Json     // [{ label: "", val: "" }]
-  section1         Json     // { title: "", subtitle: "" }
+  stats            Json // [{ label: "", val: "" }]
+  section1         Json // { title: "", subtitle: "" }
   section2         Json
   section3         Json
   section4         Json
-  detailsSection   Json     // { title: "", description: "", imageAlt: "" }
-  freshnessSection Json     // { title: "", description: "" }
-  buyNowSection    Json     // { price: "", unit: "", processingParams: [], deliveryPromise: "", returnPolicy: "" }
+  detailsSection   Json // { title: "", description: "", imageAlt: "" }
+  freshnessSection Json // { title: "", description: "" }
+  buyNowSection    Json // { price: "", unit: "", processingParams: [], deliveryPromise: "", returnPolicy: "" }
 
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete
+  version   Int       @default(0)
 
   @@index([slug])
   @@index([isActive])
@@ -223,8 +229,9 @@ model ContactSubmission {
 
   ipAddress String?
   userAgent String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete
 
   @@index([status])
   @@index([email])
@@ -260,6 +267,7 @@ model NewsletterSubscriber {
 
   createdAt      DateTime  @default(now())
   unsubscribedAt DateTime?
+  deletedAt      DateTime? // Soft delete
 
   @@index([email])
   @@index([isActive])
@@ -357,4 +365,53 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([userId])
   @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NOTIFICATION SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+model Notification {
+  id       String               @id @default(cuid())
+  userId   String
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title    String
+  message  String
+  type     NotificationType     @default(INFO)
+  priority NotificationPriority @default(NORMAL)
+  link     String?
+  isRead   Boolean              @default(false)
+  metadata Json? // Contextual payload
+
+  readAt    DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, isRead, createdAt]) // Optimized for unread fetch
+  @@index([userId, createdAt]) // Optimized for timeline
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum NotificationPriority {
+  CRITICAL
+  HIGH
+  NORMAL
+  LOW
 }

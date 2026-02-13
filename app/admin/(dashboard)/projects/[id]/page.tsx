@@ -1,25 +1,23 @@
+import { getProject } from "@/actions/project";
 import { ProjectEditorForm } from "@/components/admin/ProjectEditorForm";
-import { PROJECTS } from "@/lib/admin-data";
+import { requireRole } from "@/lib/auth-check";
+import { Role } from "@prisma/client";
+import { notFound } from "next/navigation";
 
-export default function EditProjectPage({ params }: { params: { id: string } }) {
-  const project = PROJECTS.find(p => p.id.toString() === params.id) || PROJECTS[0];
-  
-  const initialData = {
-    title: project.title,
-    client: project.client,
-    category: project.category,
-    status: project.status,
-    url: "https://example.com/project", // Mock URL
-    completionDate: "2025-10-24", // Mock Date
-    description: "This project aimed to revolutionize the client's digital presence...",
-    image: project.image
-  };
+export const dynamic = "force-dynamic";
 
-  return <ProjectEditorForm initialData={initialData} isEditing={true} />;
-}
+export default async function EditProjectPage({ params }: { params: { id: string } }) {
+  await requireRole([Role.ADMIN, Role.SUPER_ADMIN]);
 
-export function generateStaticParams() {
-   return PROJECTS.map(project => ({
-     id: project.id.toString()
-   }));
+  if (params.id === 'new') {
+      return <ProjectEditorForm />; // New Project
+  }
+
+  const project = await getProject(params.id);
+
+  if (!project) {
+    notFound();
+  }
+
+  return <ProjectEditorForm initialData={project} isEditing={true} />;
 }

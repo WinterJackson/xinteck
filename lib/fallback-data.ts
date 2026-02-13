@@ -12,7 +12,7 @@ export const FALLBACK_SERVICES: Service[] = [
         price: "Custom",
         description: "Next.js 14+ - High Performance - SEO Optimized",
         themeColor: "#00B4D8", // Cyan
-        gradient: "linear-gradient(135deg, #00B4D8 0%, #0077B6 100%)",
+
         features: ["Next.js App Router", "Server Components", "Edge Caching"],
         stats: [{ label: "Lighthouse", val: "100" }, { label: "Uptime", val: "99.9%" }, { label: "Speed", val: "<100ms" }],
         section1: { title: "Web Development.", subtitle: "Digital Excellence." },
@@ -36,7 +36,9 @@ export const FALLBACK_SERVICES: Service[] = [
             returnPolicy: "30-day bug fix warranty included."
         },
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        deletedAt: null,
+        version: 0,
     },
     {
         id: "fallback-2",
@@ -48,7 +50,7 @@ export const FALLBACK_SERVICES: Service[] = [
         price: "Custom",
         description: "React Native - iOS & Android - Smooth 60FPS",
         themeColor: "#AF52DE", // Purple
-        gradient: "linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)",
+
         features: ["Cross-Platform", "Native Modules", "Offline Mode"],
         stats: [{ label: "Platforms", val: "2" }, { label: "Code Share", val: "90%" }, { label: "FPS", val: "60" }],
         section1: { title: "Mobile Apps.", subtitle: "Native Performance." },
@@ -72,7 +74,9 @@ export const FALLBACK_SERVICES: Service[] = [
             returnPolicy: "Post-launch crash monitoring included."
         },
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        deletedAt: null,
+        version: 0,
     },
     {
         id: "fallback-3",
@@ -84,7 +88,7 @@ export const FALLBACK_SERVICES: Service[] = [
         price: "Enterprise",
         description: "Microservices - Scalable - Secure",
         themeColor: "#FF9500", // Orange
-        gradient: "linear-gradient(135deg, #FF9500 0%, #FF3B30 100%)",
+
         features: ["Enterprise Grade", "SaaS Ready", "API First"],
         stats: [{ label: "Security", val: "AES-256" }, { label: "Scale", val: "Unltd" }, { label: "API", val: "REST/QL" }],
         section1: { title: "Custom Software.", subtitle: "Tailored Solutions." },
@@ -108,7 +112,9 @@ export const FALLBACK_SERVICES: Service[] = [
             returnPolicy: "SLA-backed support agreements."
         },
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        deletedAt: null,
+        version: 0,
     },
     {
         id: "fallback-4",
@@ -120,7 +126,7 @@ export const FALLBACK_SERVICES: Service[] = [
         price: "Custom",
         description: "Figma - Prototyping - Design Systems",
         themeColor: "#FF2D55", // Pinkish Red
-        gradient: "linear-gradient(135deg, #FF2D55 0%, #CC0000 100%)",
+
         features: ["User Research", "Wireframing", "Hi-Fi Visuals"],
         stats: [{ label: "Users", val: "Happy" }, { label: "Conversion", val: "+40%" }, { label: "Awards", val: "Yes" }],
         section1: { title: "UI/UX Design.", subtitle: "User Centric." },
@@ -144,7 +150,9 @@ export const FALLBACK_SERVICES: Service[] = [
             returnPolicy: "Unlimited revisions during design phase."
         },
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        deletedAt: null,
+        version: 0,
     },
     {
         id: "fallback-5",
@@ -156,7 +164,7 @@ export const FALLBACK_SERVICES: Service[] = [
         price: "Retainer",
         description: "AWS/Azure - Kubernetes - Terraform",
         themeColor: "#34C759", // Green
-        gradient: "linear-gradient(135deg, #34C759 0%, #30B0C7 100%)",
+
         features: ["Auto Scaling", "Cost Optics", "Security Ops"],
         stats: [{ label: "Uptime", val: "99.99%" }, { label: "Deploy", val: "Auto" }, { label: "Cost", val: "-30%" }],
         section1: { title: "Cloud & DevOps.", subtitle: "Infrastructure." },
@@ -180,6 +188,8 @@ export const FALLBACK_SERVICES: Service[] = [
             returnPolicy: "Monthly performance reports."
         },
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        deletedAt: null,
+        version: 0,
     }
 ];

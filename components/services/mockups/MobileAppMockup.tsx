@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Zap } from "lucide-react";
+import NextImage from "next/image";
 
 export function MobileAppMockup() {
   return (
@@ -38,9 +39,11 @@ export function MobileAppMockup() {
                   {/* Static App Logo */}
                   <div className="relative w-32 h-32">
                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                     <img 
+                     <NextImage 
                         src="/logos/logo-dark.png" 
                         alt="App Icon" 
+                        width={128}
+                        height={128}
                         className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(212,175,55,0.3)]"
                      />
                   </div>

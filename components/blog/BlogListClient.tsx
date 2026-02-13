@@ -56,13 +56,13 @@ export function BlogListClient({ allPosts }: { allPosts: (BlogMeta & { slug: str
               <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-foreground/30" size={20} />
               <input 
                 type="text" 
-                placeholder="Search tech insights..."
+                placeholder="Search articles..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1); // Reset to first page on search
                 }}
-                className="w-full bg-white/50 dark:bg-primary/10 backdrop-blur-xl border border-primary/20 rounded-[10px] px-16 py-4 md:py-5 text-foreground placeholder:text-foreground/20 focus:border-primary outline-none transition-all"
+                className="w-full bg-white/50 dark:bg-white/5 backdrop-blur-xl border border-primary/20 rounded-[10px] px-16 py-4 md:py-5 text-foreground placeholder:text-foreground/20 focus:border-gold/50 outline-none transition-all"
               />
             </div>
           </div>

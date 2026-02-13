@@ -1,7 +1,12 @@
-const { PrismaClient } = require('@prisma/client');
+import { ContentStatus, PrismaClient, ProjectCategory, ProjectStatus, Role, UserStatus } from '@prisma/client';
+import bcrypt from 'bcrypt';
+import fs from 'fs';
+import matter from 'gray-matter';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
+// Initial Data
 const services = [
     {
         slug: "web-development",
@@ -10,7 +15,7 @@ const services = [
         price: "Custom",
         description: "Next.js 14+ - High Performance - SEO Optimized",
         themeColor: "#00B4D8", // Cyan
-        gradient: "linear-gradient(135deg, #00B4D8 0%, #0077B6 100%)",
+
         features: ["Next.js App Router", "Server Components", "Edge Caching"],
         stats: [{ label: "Lighthouse", val: "100" }, { label: "Uptime", val: "99.9%" }, { label: "Speed", val: "<100ms" }],
         section1: { title: "Web Development.", subtitle: "Digital Excellence." },
@@ -32,7 +37,9 @@ const services = [
             processingParams: ["SEO Ready", "Analytics", "CMS Integration"],
             deliveryPromise: "Agile delivery with bi-weekly demos. Full source code ownership.",
             returnPolicy: "30-day bug fix warranty included."
-        }
+        },
+        isActive: true,
+        sortOrder: 1
     },
     {
         slug: "mobile-app-development",
@@ -41,7 +48,7 @@ const services = [
         price: "Custom",
         description: "React Native - iOS & Android - Smooth 60FPS",
         themeColor: "#AF52DE", // Purple
-        gradient: "linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)",
+
         features: ["Cross-Platform", "Native Modules", "Offline Mode"],
         stats: [{ label: "Platforms", val: "2" }, { label: "Code Share", val: "90%" }, { label: "FPS", val: "60" }],
         section1: { title: "Mobile Apps.", subtitle: "Native Performance." },
@@ -63,7 +70,9 @@ const services = [
             processingParams: ["iOS + Android", "Push Notifs", "Biometrics"],
             deliveryPromise: "TestFlight builds delivered weekly.",
             returnPolicy: "Post-launch crash monitoring included."
-        }
+        },
+        isActive: true,
+        sortOrder: 2
     },
     {
         slug: "custom-software-development",
@@ -72,7 +81,7 @@ const services = [
         price: "Enterprise",
         description: "Microservices - Scalable - Secure",
         themeColor: "#FF9500", // Orange
-        gradient: "linear-gradient(135deg, #FF9500 0%, #FF3B30 100%)",
+
         features: ["Enterprise Grade", "SaaS Ready", "API First"],
         stats: [{ label: "Security", val: "AES-256" }, { label: "Scale", val: "Unltd" }, { label: "API", val: "REST/QL" }],
         section1: { title: "Custom Software.", subtitle: "Tailored Solutions." },
@@ -94,7 +103,9 @@ const services = [
             processingParams: ["Cloud Native", "Dockerized", "CI/CD Pipeline"],
             deliveryPromise: "Phased rollout with user training.",
             returnPolicy: "SLA-backed support agreements."
-        }
+        },
+        isActive: true,
+        sortOrder: 3
     },
     {
         slug: "ui-ux-design",
@@ -103,7 +114,7 @@ const services = [
         price: "Custom",
         description: "Figma - Prototyping - Design Systems",
         themeColor: "#FF2D55", // Pinkish Red
-        gradient: "linear-gradient(135deg, #FF2D55 0%, #CC0000 100%)",
+
         features: ["User Research", "Wireframing", "Hi-Fi Visuals"],
         stats: [{ label: "Users", val: "Happy" }, { label: "Conversion", val: "+40%" }, { label: "Awards", val: "Yes" }],
         section1: { title: "UI/UX Design.", subtitle: "User Centric." },
@@ -125,7 +136,9 @@ const services = [
             processingParams: ["Figma Files", "Style Guide", "Assets"],
             deliveryPromise: "Developer-ready handover files.",
             returnPolicy: "Unlimited revisions during design phase."
-        }
+        },
+        isActive: true,
+        sortOrder: 4
     },
     {
         slug: "cloud-devops",
@@ -134,7 +147,7 @@ const services = [
         price: "Retainer",
         description: "AWS/Azure - Kubernetes - Terraform",
         themeColor: "#34C759", // Green
-        gradient: "linear-gradient(135deg, #34C759 0%, #30B0C7 100%)",
+
         features: ["Auto Scaling", "Cost Optics", "Security Ops"],
         stats: [{ label: "Uptime", val: "99.99%" }, { label: "Deploy", val: "Auto" }, { label: "Cost", val: "-30%" }],
         section1: { title: "Cloud & DevOps.", subtitle: "Infrastructure." },
@@ -156,20 +169,164 @@ const services = [
             processingParams: ["AWS/GCP/Azure", "CI/CD Setup", "Audits"],
             deliveryPromise: "Zero-downtime migrations.",
             returnPolicy: "Monthly performance reports."
-        }
+        },
+        isActive: true,
+        sortOrder: 5
     }
 ];
 
 async function main() {
     console.log('Start seeding ...');
+
+    // 1. Create Default Admin User
+    console.log('Creating admin user...');
+
+    // Hash password "admin123"
+    const passwordHash = await bcrypt.hash('admin123', 10);
+    const adminEmail = 'admin@xinteck.com';
+
+    const adminUser = await prisma.user.upsert({
+        where: { email: adminEmail },
+        update: {
+            passwordHash, // Update password if already exists
+        },
+        create: {
+            email: adminEmail,
+            name: 'Xinteck Admin',
+            role: Role.SUPER_ADMIN,
+            status: UserStatus.ACTIVE,
+            passwordHash,
+        },
+    });
+    console.log(`Admin user created: ${adminUser.id}`);
+
+    // 2. Seed Services
+    console.log('Seeding Services...');
     for (const service of services) {
+        // Prepare data matching the schema exactly
+        // Note: The schema for Service has Json fields, arrays, etc.
+        // We need to ensure the data matches the type expected by Prisma.
+        const serviceData = {
+            ...service,
+            // Ensure section fields are treated as JSON input
+            stats: service.stats as any,
+            section1: service.section1 as any,
+            section2: service.section2 as any,
+            section3: service.section3 as any,
+            section4: service.section4 as any,
+            detailsSection: service.detailsSection as any,
+            freshnessSection: service.freshnessSection as any,
+            buyNowSection: service.buyNowSection as any,
+        };
+
         const s = await prisma.service.upsert({
             where: { slug: service.slug },
-            update: service,
-            create: service,
+            update: serviceData,
+            create: serviceData,
         });
-        console.log(`Created service with id: ${s.id}`);
+        console.log(`Created service: ${s.slug}`);
     }
+
+    // 3. Migrate Media/Blog Posts from MDX
+    const blogDir = path.join(process.cwd(), 'content/blog');
+    if (fs.existsSync(blogDir)) {
+        console.log('Migrating Blog Posts from MDX...');
+        const files = fs.readdirSync(blogDir).filter(f => f.endsWith('.mdx'));
+
+        for (const file of files) {
+            const content = fs.readFileSync(path.join(blogDir, file), 'utf8');
+            const { data, content: body } = matter(content);
+            const slug = file.replace('.mdx', '');
+
+            // Upsert Category if present
+            // Logic: if frontmatter has `tag`, treat as category name
+            let categoryId: string | undefined;
+            if (data.tag) {
+                const categorySlug = data.tag.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                const category = await prisma.blogCategory.upsert({
+                    where: { slug: categorySlug },
+                    update: {},
+                    create: {
+                        name: data.tag,
+                        slug: categorySlug,
+                    },
+                });
+                categoryId = category.id;
+            }
+
+            await prisma.blogPost.upsert({
+                where: { slug },
+                update: {
+                    title: data.title || 'Untitled Post',
+                    excerpt: data.excerpt,
+                    content: body,
+                    status: ContentStatus.PUBLISHED,
+                    publishedAt: data.date ? new Date(data.date) : new Date(),
+                    authorId: adminUser.id, // Assign to admin
+                    categoryId: categoryId,
+                },
+                create: {
+                    slug,
+                    title: data.title || 'Untitled Post',
+                    excerpt: data.excerpt,
+                    content: body,
+                    status: ContentStatus.PUBLISHED,
+                    publishedAt: data.date ? new Date(data.date) : new Date(),
+                    authorId: adminUser.id, // Assign to admin
+                    categoryId: categoryId,
+                },
+            });
+            console.log(`Migrated blog post: ${slug}`);
+        }
+    }
+
+    // 4. Migrate Projects from MDX
+    const projectDir = path.join(process.cwd(), 'content/projects');
+    if (fs.existsSync(projectDir)) {
+        console.log('Migrating Projects from MDX...');
+        const files = fs.readdirSync(projectDir).filter(f => f.endsWith('.mdx'));
+
+        for (const file of files) {
+            const content = fs.readFileSync(path.join(projectDir, file), 'utf8');
+            const { data, content: body } = matter(content);
+            const slug = file.replace('.mdx', '');
+
+            // Map category string to Enum
+            // Default to WEB_DEV if not matched or custom logic
+            // data.category might be "Fintech" which isn't in Enum
+            // Enum: WEB_DEV, MOBILE_APP, UI_UX_DESIGN, CUSTOM_SOFTWARE, CONSULTING
+            let projectCategory: ProjectCategory = ProjectCategory.WEB_DEV;
+            const catLower = (data.category || '').toLowerCase();
+
+            if (catLower.includes('mobile') || catLower.includes('app')) projectCategory = ProjectCategory.MOBILE_APP;
+            else if (catLower.includes('design') || catLower.includes('ux')) projectCategory = ProjectCategory.UI_UX_DESIGN;
+            else if (catLower.includes('consulting')) projectCategory = ProjectCategory.CONSULTING;
+            else if (catLower.includes('software') || catLower.includes('fintech')) projectCategory = ProjectCategory.CUSTOM_SOFTWARE;
+
+            await prisma.project.upsert({
+                where: { slug },
+                update: {
+                    title: data.title || 'Untitled Project',
+                    description: data.description ? `${data.description}\n\n${body}` : body,
+                    client: data.client,
+                    category: projectCategory,
+                    status: ProjectStatus.COMPLETED,
+                    authorId: adminUser.id,
+                },
+                create: {
+                    slug,
+                    title: data.title || 'Untitled Project',
+                    description: data.description ? `${data.description}\n\n${body}` : body,
+                    client: data.client,
+                    category: projectCategory,
+                    status: ProjectStatus.COMPLETED,
+                    authorId: adminUser.id,
+                },
+            });
+            console.log(`Migrated project: ${slug}`);
+        }
+    }
+
     console.log('Seeding finished.');
 }
 

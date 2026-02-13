@@ -1,9 +1,14 @@
 "use client";
 
+import { createBlogPost, updateBlogPost } from "@/actions/blog";
 import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
-import { ArrowLeft, Save, Upload } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
+import { MediaPicker } from "@/components/admin/MediaPicker";
+import { PageContainer, PageHeader } from "@/components/admin/ui";
+import { Select } from "@/components/admin/ui/Select";
+import { Image as ImageIcon, Save, Upload, X } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 interface BlogEditorFormProps {
   initialData?: any;
@@ -11,14 +16,20 @@ interface BlogEditorFormProps {
 }
 
 export function BlogEditorForm({ initialData, isEditing = false }: BlogEditorFormProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  
   const [formData, setFormData] = useState({
     title: initialData?.title || "",
     slug: initialData?.slug || "",
-    category: initialData?.category || "Technology", // default
+    category: initialData?.category || "Technology",
     status: initialData?.status || "Draft",
     excerpt: initialData?.excerpt || "",
     content: initialData?.content || "",
-    image: initialData?.image || ""
+    image: initialData?.featuredImage || "", // Note field name mapping
+    version: initialData?.version
   });
 
   const generateSlug = (title: string) => {
@@ -30,28 +41,84 @@ export function BlogEditorForm({ initialData, isEditing = false }: BlogEditorFor
     setFormData(prev => ({
       ...prev,
       title,
-      slug: !isEditing ? generateSlug(title) : prev.slug // Only auto-gen slug on create
+      slug: !isEditing ? generateSlug(title) : prev.slug
     }));
   };
 
+  const handleSave = async () => {
+      setError("");
+      if (!formData.title || !formData.slug) {
+          setError("Title and Slug are required.");
+          return;
+      }
+
+      startTransition(async () => {
+          try {
+              let result;
+              if (isEditing && initialData?.id) {
+                  result = await updateBlogPost(initialData.id, formData);
+              } else {
+                  result = await createBlogPost(formData);
+              }
+
+              if (result && (result.success || result.id)) {
+                  router.push("/admin/blog");
+                  router.refresh();
+              }
+          } catch (e: any) {
+              if (e.message.includes("Concurrency conflict")) {
+                  if (confirm("This post has been modified by another user. Reload to get the latest version?")) {
+                      window.location.reload();
+                      return;
+                  }
+              }
+              setError(e.message || "Failed to save post");
+          }
+      });
+  };
+
   return (
-    <div className="flex flex-col gap-3 md:gap-6 max-w-5xl mx-auto w-full min-w-0 overflow-hidden">
-       {/* Actions Header */}
-       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <Link href="/admin/blog" className="flex items-center gap-1 md:gap-2 text-white/40 hover:text-white transition-colors text-[10px] md:text-sm font-bold">
-             <ArrowLeft size={12} className="md:w-4 md:h-4" />
-             Back to Blog
-          </Link>
-          <div className="flex gap-2 md:gap-3 w-full sm:w-auto">
-             <button className="flex-1 sm:flex-initial px-3 py-1.5 md:px-4 md:py-2 rounded-[8px] bg-white/30 dark:bg-white/5 ring-1 ring-black/10 dark:ring-white/10 text-black dark:text-white hover:bg-white/50 dark:hover:bg-white/10 transition-all font-bold text-[10px] md:text-sm whitespace-nowrap">
-                Save Draft
-             </button>
-             <button className="flex-1 sm:flex-initial px-3 py-1.5 md:px-6 md:py-2 rounded-[8px] bg-gold text-black font-bold text-[10px] md:text-sm hover:bg-white transition-colors flex items-center justify-center gap-1 md:gap-2 whitespace-nowrap">
-                <Save size={12} className="md:w-4 md:h-4" />
-                {isEditing ? "Update" : "Publish"}
-             </button>
-          </div>
-       </div>
+    <PageContainer>
+       <MediaPicker 
+           isOpen={showMediaPicker} 
+           onClose={() => setShowMediaPicker(false)} 
+           onSelect={(url) => setFormData({ ...formData, image: url })} 
+       />
+
+       <PageHeader 
+         title={isEditing ? "Edit Blog Post" : "New Blog Post"}
+         backUrl="/admin/blog"
+         backLabel="Back to Blog"
+         actions={
+           <div className="flex gap-2 md:gap-3 w-full sm:w-auto">
+              <button 
+                 onClick={() => { setFormData({...formData, status: "Draft"}); handleSave(); }}
+                 disabled={isPending}
+                 className="flex-1 sm:flex-initial px-3 py-1.5 md:px-4 md:py-2 rounded-[8px] bg-white/30 dark:bg-white/5 ring-1 ring-black/10 dark:ring-white/10 text-black dark:text-white hover:bg-white/50 dark:hover:bg-white/10 transition-all font-bold text-[10px] md:text-sm whitespace-nowrap disabled:opacity-50"
+              >
+                 Save Draft
+              </button>
+              <button 
+                 onClick={handleSave}
+                 disabled={isPending}
+                 className="flex-1 sm:flex-initial px-3 py-1.5 md:px-6 md:py-2 rounded-[8px] bg-gold text-black font-bold text-[10px] md:text-sm hover:bg-white transition-colors flex items-center justify-center gap-1 md:gap-2 whitespace-nowrap disabled:opacity-50"
+              >
+                 {isPending ? (
+                     <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"/>
+                 ) : (
+                     <Save size={12} className="md:w-4 md:h-4" />
+                 )}
+                 {isEditing ? "Update" : "Publish"}
+              </button>
+           </div>
+         }
+       />
+
+       {error && (
+           <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-[8px] text-sm">
+               {error}
+           </div>
+       )}
 
        <div className="grid lg:grid-cols-3 gap-3 md:gap-6">
           {/* Main Content Column */}
@@ -100,30 +167,30 @@ export function BlogEditorForm({ initialData, isEditing = false }: BlogEditorFor
                 
                 <div className="flex flex-col gap-2">
                    <label className="text-[8px] md:text-xs font-bold text-white/60">Status</label>
-                   <select 
+                   <Select 
                      value={formData.status}
-                     onChange={(e) => setFormData({...formData, status: e.target.value})}
-                     className="bg-white/5 border border-white/10 rounded-[8px] px-2 md:px-3 py-1.5 md:py-2 text-white text-xs md:text-sm outline-none focus:border-gold/50"
-                   >
-                      <option value="Draft">Draft</option>
-                      <option value="Published">Published</option>
-                      <option value="Archived">Archived</option>
-                   </select>
+                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({...formData, status: e.target.value})}
+                     options={[
+                       { value: "Draft", label: "Draft" },
+                       { value: "Published", label: "Published" },
+                       { value: "Archived", label: "Archived" }
+                     ]}
+                   />
                 </div>
 
                 <div className="flex flex-col gap-2">
                    <label className="text-[8px] md:text-xs font-bold text-white/60">Category</label>
-                   <select 
+                   <Select 
                      value={formData.category}
-                     onChange={(e) => setFormData({...formData, category: e.target.value})}
-                     className="bg-white/5 border border-white/10 rounded-[8px] px-2 md:px-3 py-1.5 md:py-2 text-white text-xs md:text-sm outline-none focus:border-gold/50"
-                   >
-                      <option value="Technology">Technology</option>
-                      <option value="Design">Design</option>
-                      <option value="Engineering">Engineering</option>
-                      <option value="DevOps">DevOps</option>
-                      <option value="Sustainability">Sustainability</option>
-                   </select>
+                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({...formData, category: e.target.value})}
+                     options={[
+                        { value: "Technology", label: "Technology" },
+                        { value: "Design", label: "Design" },
+                        { value: "Engineering", label: "Engineering" },
+                        { value: "DevOps", label: "DevOps" },
+                        { value: "Sustainability", label: "Sustainability" }
+                     ]}
+                   />
                 </div>
              </div>
 
@@ -131,17 +198,53 @@ export function BlogEditorForm({ initialData, isEditing = false }: BlogEditorFor
              <div className="bg-white/30 dark:bg-white/5 border border-white/20 dark:border-white/10 rounded-[10px] p-3 md:p-6 backdrop-blur-md flex flex-col gap-3 md:gap-4">
                 <h3 className="font-bold text-white text-xs md:text-sm border-b border-white/10 pb-2">Featured Image</h3>
                 
-                <div className="aspect-video bg-white/5 rounded-[8px] border border-dashed border-white/20 flex flex-col items-center justify-center gap-1 md:gap-2 cursor-pointer hover:border-gold/50 hover:bg-white/10 transition-all group">
-                   <Upload size={18} className="md:w-6 md:h-6 text-white/40 group-hover:text-gold transition-colors" />
-                   <span className="text-[8px] md:text-xs text-white/40 font-medium">Click to upload</span>
+                {formData.image ? (
+                    <div className="relative aspect-video bg-black/50 rounded-[8px] overflow-hidden border border-white/10 group">
+                        <Image 
+                            src={formData.image} 
+                            alt="Featured" 
+                            fill 
+                            className="object-cover" 
+                        />
+                         <button 
+                            onClick={() => setFormData({...formData, image: ""})}
+                            className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                            <X size={14} />
+                        </button>
+                        <button 
+                            onClick={() => setShowMediaPicker(true)}
+                            className="absolute bottom-2 right-2 bg-black/60 hover:bg-gold text-white hover:text-black px-2 py-1 rounded-[4px] text-xs font-bold opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                            Change
+                        </button>
+                    </div>
+                ) : (
+                    <div 
+                       onClick={() => setShowMediaPicker(true)}
+                       className="aspect-video bg-white/5 rounded-[8px] border border-dashed border-white/20 flex flex-col items-center justify-center gap-1 md:gap-2 cursor-pointer hover:border-gold/50 hover:bg-white/10 transition-all group"
+                    >
+                       <Upload size={18} className="md:w-6 md:h-6 text-white/40 group-hover:text-gold transition-colors" />
+                       <span className="text-[8px] md:text-xs text-white/40 font-medium">Click to upload</span>
+                    </div>
+                )}
+                
+                <div className="relative">
+                    <input 
+                       type="text" 
+                       value={formData.image}
+                       onChange={(e) => setFormData({...formData, image: e.target.value})}
+                       placeholder="Or paste image URL..." 
+                       className="w-full bg-white/5 border border-white/10 rounded-[8px] px-2 md:px-3 py-1.5 md:py-2 text-white text-[10px] md:text-xs outline-none focus:border-gold/50 pr-8"
+                    />
+                    <button
+                        onClick={() => setShowMediaPicker(true)}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white"
+                        title="Open Media Library"
+                     >
+                        <ImageIcon size={14} />
+                     </button>
                 </div>
-                <input 
-                   type="text" 
-                   value={formData.image}
-                   onChange={(e) => setFormData({...formData, image: e.target.value})}
-                   placeholder="Or enter image URL..." 
-                   className="bg-white/5 border border-white/10 rounded-[8px] px-2 md:px-3 py-1.5 md:py-2 text-white text-[10px] md:text-xs outline-none focus:border-gold/50"
-                />
              </div>
              
              {/* Excerpt */}
@@ -157,6 +260,6 @@ export function BlogEditorForm({ initialData, isEditing = false }: BlogEditorFor
              </div>
           </div>
        </div>
-    </div>
+    </PageContainer>
   );
 }

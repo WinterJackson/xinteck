@@ -1,51 +1,78 @@
 "use client";
 
+import { ConfirmDialog } from "@/components/admin/ui";
+import { Pagination } from "@/components/admin/ui/Pagination";
 import { Edit, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-interface Column {
+interface Column<T> {
   key: string;
   label: string;
-  render?: (row: any) => React.ReactNode;
+  render?: (row: T) => React.ReactNode;
   align?: "left" | "center" | "right";
 }
 
-interface DataGridProps {
-  columns: Column[];
-  data: any[];
+interface DataGridProps<T> {
+  columns: Column<T>[];
+  data: T[];
   actions?: {
-    onEdit?: (id: any) => void;
-    onDelete?: (id: any[]) => void;
-    onView?: (id: any) => void;
+    onEdit?: (id: string) => void;
+    onDelete?: (id: string[]) => void;
+    onView?: (id: string) => void;
   };
   selectable?: boolean;
   editUrl?: string; // Optional URL pattern for edit links if onEdit not used
    hideSearch?: boolean; // Hide internal search bar if parent has its own
    hideBulkActions?: boolean; // Hide bulk action buttons (delete)
+   searchPlaceholder?: string; // Customizable placeholder text
  }
  
- export function DataGrid({ columns, data, actions, selectable = true, editUrl, hideSearch = false, hideBulkActions = false }: DataGridProps) {
-   const [selectedItems, setSelectedItems] = useState<any[]>([]);
+ export interface PaginationConfig {
+    page: number;
+    totalPages: number;
+    total?: number;
+    onPageChange: (page: number) => void;
+ }
+
+ export function DataGrid<T extends { id: string }>({ columns, data, actions, selectable = true, editUrl, hideSearch = false, hideBulkActions = false, searchPlaceholder, selectedIds, onSelectionChange, pagination }: DataGridProps<T> & { selectedIds?: string[], onSelectionChange?: (ids: string[]) => void, pagination?: PaginationConfig }) {
+   const [internalSelectedItems, setInternalSelectedItems] = useState<string[]>([]);
+   
+   // Use controlled state if provided, otherwise internal
+   const selectedItems = selectedIds || internalSelectedItems;
+   const setSelectedItems = (ids: string[]) => {
+       if (onSelectionChange) {
+           onSelectionChange(ids);
+       } else {
+           setInternalSelectedItems(ids);
+       }
+   };
+
    const [search, setSearch] = useState("");
    const [currentPage, setCurrentPage] = useState(1);
    const itemsPerPage = 10;
  
-   // Filter Data
-   const filteredData = data.filter(row => 
+   // Filter Data (Client-side only if not server paginated)
+   // If server pagination is active, we assume data is already filtered/paginated
+   const isServerSide = !!pagination;
+
+   const filteredData = isServerSide ? data : data.filter(row => 
       Object.values(row).some(val => 
          String(val).toLowerCase().includes(search.toLowerCase())
       )
    );
  
    // Pagination Logic
-   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-   const paginatedData = filteredData.slice(
+   // If server side, use provided totals. If client, calc from filteredData.
+   const totalPages = isServerSide ? pagination.totalPages : Math.ceil(filteredData.length / itemsPerPage);
+   const displayedPage = isServerSide ? pagination.page : currentPage;
+   
+   const paginatedData = isServerSide ? filteredData : filteredData.slice(
       (currentPage - 1) * itemsPerPage,
       currentPage * itemsPerPage
    );
  
-   const toggleSelect = (id: any) => {
+   const toggleSelect = (id: string) => {
      if (selectedItems.includes(id)) {
        setSelectedItems(selectedItems.filter(item => item !== id));
      } else {
@@ -64,40 +91,53 @@ interface DataGridProps {
    const isAllSelected = paginatedData.length > 0 && selectedItems.length === paginatedData.length;
    const onDelete = actions?.onDelete;
  
-   const showToolbar = !hideSearch || (!hideBulkActions && onDelete);
- 
-   return (
-     <div className="flex flex-col gap-4">
-        {/* Actions Bar */}
-        {showToolbar && (
-           <div className="flex justify-between items-center gap-2 bg-white/30 dark:bg-white/5 border border-white/20 dark:border-white/10 p-3 md:p-4 rounded-[10px] backdrop-blur-md">
-               {!hideSearch && (
-                <div className="relative flex-1 md:flex-none">
-                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
-                   <input 
-                     type="text" 
-                     placeholder="Search records..." 
-                     value={search}
-                     onChange={(e) => setSearch(e.target.value)}
-                     className="pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-[8px] text-sm text-white placeholder:text-white/20 focus:border-gold/50 outline-none w-full md:w-64"
-                   />
-                </div>
-               )}
-               
-               <div className="flex gap-2 shrink-0">
-                  {/* Filter button removed as per request */}
-                  {onDelete && !hideBulkActions && (
-                     <button 
-                       onClick={() => selectedItems.length > 0 && onDelete(selectedItems)}
-                       disabled={selectedItems.length === 0}
-                       className="p-2 bg-red-500/10 border border-red-500/20 rounded-[8px] text-red-500 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                     >
-                        <Trash2 size={18} />
-                     </button>
-                  )}
-               </div>
-           </div>
-        )}
+    const showToolbar = !hideSearch || (!hideBulkActions && onDelete);
+    const [confirmDeleteIds, setConfirmDeleteIds] = useState<string[] | null>(null);
+
+    return (
+      <div className="flex flex-col gap-4">
+         {/* Actions Bar */}
+         {showToolbar && (
+            <div className="w-auto inline-flex items-center gap-2 bg-white/30 dark:bg-white/5 border border-white/20 dark:border-white/10 p-2 rounded-[10px] backdrop-blur-md self-start">
+                {!hideSearch && (
+                 <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={16} />
+                    <input 
+                      type="text" 
+                      placeholder={searchPlaceholder || "Search records..."} 
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-9 pr-4 py-2 w-48 md:w-64 bg-black/20 dark:bg-white/5 border border-white/5 dark:border-white/10 rounded-[10px] text-sm text-white placeholder:text-white/20 dark:placeholder:text-white/30 focus:border-gold/50 outline-none transition-colors"
+                    />
+                 </div>
+                )}
+                
+                {onDelete && !hideBulkActions && (
+                    <button 
+                    onClick={() => selectedItems.length > 0 && setConfirmDeleteIds(selectedItems)}
+                    disabled={selectedItems.length === 0}
+                    className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-[8px] text-red-400 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <Trash2 size={16} />
+                        <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Delete</span>
+                    </button>
+                )}
+            </div>
+         )}
+         
+         <ConfirmDialog 
+            open={!!confirmDeleteIds} 
+            onClose={() => setConfirmDeleteIds(null)}
+            onConfirm={() => {
+                if (confirmDeleteIds && onDelete) {
+                    onDelete(confirmDeleteIds);
+                    setSelectedItems([]);
+                    setConfirmDeleteIds(null);
+                }
+            }}
+            title={`Delete ${confirmDeleteIds?.length} item${confirmDeleteIds?.length === 1 ? '' : 's'}?`}
+            message="This action cannot be undone. Selected items will be permanently removed."
+         />
  
         {/* Data Table */}
         <div className="bg-white/30 dark:bg-white/5 border border-white/20 dark:border-white/10 rounded-[10px] overflow-hidden backdrop-blur-md">
@@ -152,7 +192,7 @@ interface DataGridProps {
                                  )}
                                  {onDelete && (
                                     <button 
-                                       onClick={() => onDelete([row.id])}
+                                       onClick={() => setConfirmDeleteIds([row.id])}
                                        className="p-1.5 hover:bg-white/10 rounded-[6px] text-white/60 hover:text-red-400 transition-colors"
                                     >
                                        <Trash2 size={16} />
@@ -165,25 +205,39 @@ interface DataGridProps {
                  </tbody>
               </table>
            </div>
-          
           {/* Pagination */}
-          <div className="p-4 border-t border-white/10 flex items-center justify-between text-xs text-white/40">
-             <span>Showing {Math.min((currentPage - 1) * itemsPerPage + 1, data.length)} to {Math.min(currentPage * itemsPerPage, data.length)} of {data.length} results</span>
-             <div className="flex gap-2">
-                <button 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 bg-white/5 border border-white/10 rounded-[6px] hover:bg-white/10 disabled:opacity-50 text-white"
-                >
-                   Previous
-                </button>
-                <button 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 bg-white/5 border border-white/10 rounded-[6px] hover:bg-white/10 disabled:opacity-50 text-white"
-                >
-                   Next
-                </button>
+          <div className="p-4 border-t border-white/10 flex flex-col md:flex-row gap-4 items-center justify-between text-xs text-white/40">
+              {isServerSide ? (
+                  <span>Showing Page {displayedPage} of {totalPages} (Total {pagination.total || 'Unknown'})</span>
+              ) : (
+                  <span>Showing {Math.min((currentPage - 1) * itemsPerPage + 1, data.length)} to {Math.min(currentPage * itemsPerPage, data.length)} of {data.length} results</span>
+              )}
+              
+              <div className="flex gap-2">
+                 {isServerSide ? (
+                     <Pagination 
+                        currentPage={displayedPage}
+                        totalPages={totalPages}
+                        onPageChange={pagination.onPageChange}
+                     />
+                 ) : (
+                     <div className="flex gap-2">
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1 bg-white/5 border border-white/10 rounded-[6px] hover:bg-white/10 disabled:opacity-50 text-white"
+                        >
+                            Previous
+                        </button>
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-3 py-1 bg-white/5 border border-white/10 rounded-[6px] hover:bg-white/10 disabled:opacity-50 text-white"
+                        >
+                            Next
+                        </button>
+                     </div>
+                 )}
              </div>
           </div>
        </div>

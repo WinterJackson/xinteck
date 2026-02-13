@@ -1,0 +1,245 @@
+"use client";
+
+import { getNotifications, markAllNotificationsRead, markNotificationRead } from "@/actions/notifications";
+import { Notification, NotificationPriority, NotificationType } from "@prisma/client";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bell, Check, CheckCircle2, ChevronRight, Info, ShieldAlert, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+// Types for UI
+type NotificationItem = Notification;
+
+export function NotificationBell() {
+    const router = useRouter();
+    const [isOpen, setIsOpen] = useState(false);
+    const [unread, setUnread] = useState<NotificationItem[]>([]);
+    const [read, setRead] = useState<NotificationItem[]>([]);
+    const [totalUnread, setTotalUnread] = useState(0);
+    
+    // Polling refs
+    const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const isTabActiveRef = useRef(true);
+    
+    // Fetch Data
+    const fetchData = async () => {
+        try {
+            const data = await getNotifications();
+            setUnread(data.unread);
+            setRead(data.read);
+            setTotalUnread(data.totalUnread);
+        } catch (error) {
+            console.error("Failed to fetch notifications", error);
+        }
+    };
+
+    // Polling Setup
+    useEffect(() => {
+        // Initial fetch
+        fetchData();
+
+        const handleVisibilityChange = () => {
+            isTabActiveRef.current = !document.hidden;
+            if (isTabActiveRef.current) {
+                // Resume polling immediately on focus
+                fetchData();
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        // Adaptive Polling
+        // If unread > 0, poll faster (20s). If 0, poll slower (45s).
+        const intervalTime = totalUnread > 0 ? 20000 : 45000;
+        
+        pollingIntervalRef.current = setInterval(() => {
+            if (isTabActiveRef.current) {
+                fetchData();
+            }
+        }, intervalTime);
+
+        return () => {
+            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, [totalUnread]); // Re-run effect when priority changes (adaptive)
+
+    // Handlers
+    const handleMarkRead = async (id: string, link: string | null) => {
+        // Optimistic update
+        const target = unread.find(n => n.id === id);
+        if (target) {
+            setUnread(prev => prev.filter(n => n.id !== id));
+            setRead(prev => [target, ...prev]);
+            setTotalUnread(prev => Math.max(0, prev - 1));
+        }
+
+        try {
+            await markNotificationRead(id);
+            if (link) {
+                router.push(link);
+                setIsOpen(false);
+            }
+        } catch (e) {
+            // Rollback (simplified, typically just refetch)
+            fetchData();
+        }
+    };
+
+    const handleMarkAllRead = async () => {
+        // Optimistic
+        setRead(prev => [...unread, ...prev]);
+        setUnread([]);
+        setTotalUnread(0);
+
+        try {
+            await markAllNotificationsRead();
+        } catch (e) {
+            fetchData();
+        }
+    };
+
+    const getIcon = (type: NotificationType) => {
+        switch (type) {
+            case "SUCCESS": return <CheckCircle2 size={16} className="text-green-500" />;
+            case "WARNING": return <ShieldAlert size={16} className="text-yellow-500" />;
+            case "ERROR": return <XCircle size={16} className="text-red-500" />;
+            default: return <Info size={16} className="text-blue-500" />;
+        }
+    };
+
+    const getPriorityStyle = (priority: NotificationPriority) => {
+        switch (priority) {
+            case "CRITICAL": return "border-l-2 border-red-500 bg-red-500/10 dark:bg-red-500/10 bg-red-50";
+            case "HIGH": return "border-l-2 border-yellow-500 bg-yellow-500/10 dark:bg-yellow-500/10 bg-yellow-50";
+            default: return "border-l-2 border-transparent hover:bg-black/5 dark:hover:bg-white/5";
+        }
+    };
+
+    return (
+        <div className="relative">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="relative text-primary hover:text-primary/80 transition-colors p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5"
+            >
+                <Bell size={20} />
+                {totalUnread > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border border-background flex items-center justify-center">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    </span>
+                )}
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        {/* Backdrop for mobile */}
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]"
+                            onClick={() => setIsOpen(false)}
+                        />
+
+                        {/* Dropdown */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute right-0 top-full mt-2 w-[90vw] sm:w-96 bg-background/95 dark:bg-black/95 border border-black/5 dark:border-white/10 rounded-xl shadow-2xl backdrop-blur-xl overflow-hidden z-50 origin-top-right"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-4 border-b border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5">
+                                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                                    Notifications 
+                                    {totalUnread > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{totalUnread}</span>}
+                                </h3>
+                                {totalUnread > 0 && (
+                                    <button 
+                                        onClick={handleMarkAllRead}
+                                        className="text-[11px] uppercase font-bold text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+                                    >
+                                        <Check size={14} /> Mark all read
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* List */}
+                            <div className="max-h-[60vh] md:max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-black/10 dark:scrollbar-thumb-white/10 scrollbar-track-transparent">
+                                {unread.length === 0 && read.length === 0 ? (
+                                    <div className="p-12 text-center text-foreground/50 flex flex-col items-center gap-3">
+                                        <div className="w-12 h-12 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center mb-1">
+                                            <Bell size={20} className="opacity-50" />
+                                        </div>
+                                        <p className="text-sm font-medium">All caught up!</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col">
+                                        {/* Unread Section */}
+                                        {unread.length > 0 && (
+                                            <div className="flex flex-col">
+                                                {unread.map(n => (
+                                                    <div 
+                                                        key={n.id}
+                                                        onClick={() => handleMarkRead(n.id, n.link)}
+                                                        className={`p-4 border-b border-black/5 dark:border-white/5 cursor-pointer group flex gap-3 items-start transition-colors ${getPriorityStyle(n.priority)}`}
+                                                    >
+                                                        <div className="mt-0.5 shrink-0">{getIcon(n.type)}</div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between gap-2 mb-1">
+                                                                <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate pr-2">{n.title}</h4>
+                                                                <span className="text-[10px] text-foreground/40 whitespace-nowrap shrink-0">
+                                                                    {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-foreground/70 line-clamp-2 leading-relaxed">{n.message}</p>
+                                                        </div>
+                                                        {n.link && (
+                                                            <ChevronRight size={14} className="text-foreground/30 self-center group-hover:text-primary transition-colors shrink-0" />
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Read Section Header */}
+                                        {read.length > 0 && (
+                                            <>
+                                                {unread.length > 0 && (
+                                                    <div className="px-4 py-2 bg-black/5 dark:bg-white/5 text-[10px] font-bold text-foreground/40 uppercase tracking-wider sticky top-0 backdrop-blur-md border-y border-black/5 dark:border-white/5">
+                                                        Recent History
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Read Section */}
+                                                {read.map(n => (
+                                                    <div 
+                                                        key={n.id}
+                                                        className="p-4 border-b border-black/5 dark:border-white/5 bg-transparent opacity-60 hover:opacity-100 transition-opacity flex gap-3 group hover:bg-black/5 dark:hover:bg-white/5"
+                                                    >
+                                                        <div className="mt-0.5 grayscale opacity-50 shrink-0">{getIcon(n.type)}</div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between gap-2 mb-1">
+                                                                <h4 className="text-sm font-medium text-foreground/80">{n.title}</h4>
+                                                                <span className="text-[10px] text-foreground/30">
+                                                                    {new Date(n.createdAt).toLocaleDateString()}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-foreground/50 line-clamp-1">{n.message}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}

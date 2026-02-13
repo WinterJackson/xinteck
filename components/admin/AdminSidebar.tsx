@@ -3,30 +3,41 @@
 import { useAdminSidebar } from "@/components/admin/AdminSidebarContext";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
+import { Role } from "@prisma/client";
 import { motion } from "framer-motion";
 import {
+    Briefcase,
     ChevronLeft,
     ChevronRight,
     FileText,
+    FolderCheck,
     FolderOpen,
     LayoutDashboard,
     LogOut,
+    Mail,
     MessageSquare,
     Settings,
+    ShieldAlert,
+    User,
     Users
 } from "lucide-react";
 import NextImage from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+// Define sidebar navigation items
 const SIDEBAR_ITEMS = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: "My Profile", href: "/admin/profile", icon: User },
   { label: "Blog", href: "/admin/blog", icon: FileText },
-  { label: "Projects", href: "/admin/projects", icon: FolderOpen },
-  { label: "Files", href: "/admin/files", icon: FolderOpen }, 
+  { label: "Projects", icon: FolderCheck, href: "/admin/projects" },
+  { label: "Services", icon: Briefcase, href: "/admin/services" },
+  { label: "Files", href: "/admin/files", icon: FolderOpen },
   { label: "Inbox", href: "/admin/inbox", icon: MessageSquare },
+  { label: "Newsletter", href: "/admin/newsletter", icon: Mail },
   { label: "Staff", href: "/admin/staff", icon: Users },
+  { label: "Audit Log", href: "/admin/audit", icon: ShieldAlert },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
@@ -38,29 +49,51 @@ const pulseAnimation = {
   transition: { duration: 3, repeat: Infinity, ease: "easeInOut" as const }
 };
 
-export function AdminSidebar() {
+export function AdminSidebar({ userRole }: { userRole?: string }) {
   const { isMobileOpen, isCollapsed, toggleCollapse } = useAdminSidebar();
   const [isMounted, setIsMounted] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/admin/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  // Filter Items based on Role
+  const filteredItems = SIDEBAR_ITEMS.filter(item => {
+    // Super Admin Only
+    if (item.label === "Settings" || item.label === "Audit Log") {
+       return userRole === Role.SUPER_ADMIN;
+    }
+    
+    // Admin & Super Admin Only
+    if (item.label === "Staff") {
+       return [Role.SUPER_ADMIN, Role.ADMIN].includes(userRole as any);
+    }
+
+    return true; // Everyone sees My Profile and others
+  });
+
   // Determine effective width based on responsiveness
-  // Mobile (<768px): Controlled by isMobileOpen. If open -> always collapsed (80px). If closed -> 0px.
-  // Desktop (>=768px): Controlled by isCollapsed. If collapsed -> 80px. If expanded -> 256px.
   const isMobile = isMounted && typeof window !== 'undefined' && window.innerWidth < 768;
   
   // Initial width should be collapsed (80px) to prevent flash
-  // On SSR/before mount: use 80px (collapsed) to prevent flash
   const currentWidth = !isMounted 
-      ? 80 // SSR: render collapsed to prevent flash
+      ? 80 
       : isMobile 
           ? (isMobileOpen ? 80 : 0) 
           : (isCollapsed ? 80 : 256);
 
-  // Override hidden state for rendering
   const isHidden = isMobile && !isMobileOpen;
 
   return (
@@ -78,7 +111,6 @@ export function AdminSidebar() {
         isHidden && "border-none bg-transparent pointer-events-none" // Hide border/bg when hidden
       )}
     >
-      {/* Container for content that needs to be hidden/clipped when width is 0 */}
       <div className={cn("flex flex-col h-full overflow-hidden", isHidden && "opacity-0")}>
         {/* Brand */}
         <div className={cn("h-20 flex items-center px-6 relative", isCollapsed ? "justify-center" : "justify-start pl-4")}>
@@ -119,7 +151,7 @@ export function AdminSidebar() {
 
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1 scrollbar-none">
-          {SIDEBAR_ITEMS.map((item) => {
+          {filteredItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));
             return (
               <Link 
@@ -161,28 +193,30 @@ export function AdminSidebar() {
         
         {/* Footer / Theme & Logout */}
         <div className="p-3 border-t border-white/10 mx-2 mb-2 space-y-2">
-          {/* Update Theme Toggle Placement */}
           <div className={cn("flex items-center", isCollapsed ? "flex-col justify-center gap-2" : "gap-3 pl-3")}>
                <ThemeToggle /> 
                {!isCollapsed && <span className="text-sm font-medium text-white/60">Theme</span>}
           </div>
 
-          <button className={cn(
-            "flex items-center gap-3 w-full px-3 py-3 rounded-[10px] transition-all font-bold shadow-lg",
-            isCollapsed ? "justify-center bg-gold/10 text-gold hover:bg-gold hover:text-black" : "bg-gold text-black hover:bg-white hover:scale-[1.02] active:scale-[0.98]"
-          )}>
+          <button 
+            onClick={handleLogout}
+            className={cn(
+              "flex items-center gap-3 w-full px-3 py-3 rounded-[10px] transition-all font-bold shadow-lg",
+              isCollapsed ? "justify-center bg-gold/10 text-gold hover:bg-gold hover:text-black" : "bg-gold text-black hover:bg-white hover:scale-[1.02] active:scale-[0.98]"
+            )}
+          >
             <LogOut size={20} />
             {!isCollapsed && <span className="font-bold">Logout</span>}
           </button>
         </div>
       </div>
 
-      {/* Collapse Toggle - HIDDEN ON MOBILE */}
+      {/* Collapse Toggle */}
       <button 
         onClick={toggleCollapse}
         className={cn(
            "absolute -right-3 top-10 bg-gold text-black p-1.5 rounded-full shadow-lg hover:scale-110 transition-transform z-[60] border-2 border-black/50 pointer-events-auto",
-           "hidden md:flex" // Hide on mobile, show on desktop
+           "hidden md:flex" 
         )}
       >
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}

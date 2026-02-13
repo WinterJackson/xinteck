@@ -1,7 +1,7 @@
 import { BlogListClient } from "@/components/blog/BlogListClient";
 import { BlogNewsletter } from "@/components/sections/BlogNewsletter";
 import { VideoScrollLayout } from "@/components/services/VideoScrollLayout";
-import { BlogMeta, getAllFilesMetadata } from "@/lib/mdx";
+import { getPublicPosts } from "@/lib/public-data";
 import { VIDEO_STATS } from "@/lib/videoStats";
 
 export const metadata = {
@@ -9,13 +9,10 @@ export const metadata = {
   description: "Deep dives into technology, engineering, and the future of software.",
 };
 
-export default async function BlogPage() {
-  const posts = await getAllFilesMetadata<BlogMeta>("blog");
+export const dynamic = "force-dynamic";
 
-  // Sort by date (descending)
-  const sortedPosts = posts.sort((a, b) => 
-    new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+export default async function BlogPage() {
+  const sortedPosts = await getPublicPosts();
 
   return (
     <VideoScrollLayout videoSrc={VIDEO_STATS.portfolio.src} videoStats={VIDEO_STATS.portfolio}>
