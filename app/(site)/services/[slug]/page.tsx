@@ -1,14 +1,9 @@
 import { ServicePageClient } from "@/components/services/ServicePageClient";
-import { getPublicService, getPublicServices } from "@/lib/public-data";
+import { getPublicService } from "@/lib/public-data";
 import { notFound } from "next/navigation";
 
-// Generate static params for SSG
-export async function generateStaticParams() {
-  const services = await getPublicServices();
-  return services.map((s) => ({
-    slug: s.slug,
-  }));
-}
+// export const dynamic = "force-static";
+// export async function generateStaticParams() { ... }
 
 export default async function ServiceDynamicPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

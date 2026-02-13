@@ -1,16 +1,13 @@
 import { VideoScrollLayout } from "@/components/services/VideoScrollLayout";
-import { getPublicPost, getPublicPosts } from "@/lib/public-data";
+import { getPublicPost } from "@/lib/public-data";
 import { VIDEO_STATS } from "@/lib/videoStats";
 import { Calendar, ChevronLeft, Clock, User } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-export async function generateStaticParams() {
-  const posts = await getPublicPosts();
-  return posts.map((post) => ({
-    slug: post.slug,
-  }));
-}
+// export const dynamic = "force-static"; // Disabled to prevent build failure if DB is unreachable
+// export async function generateStaticParams() { ... }
+
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
     const { slug } = await params;

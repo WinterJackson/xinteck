@@ -1,16 +1,12 @@
 import { VideoScrollLayout } from "@/components/services/VideoScrollLayout";
-import { getPublicProject, getPublicProjects } from "@/lib/public-data";
+import { getPublicProject } from "@/lib/public-data";
 import { VIDEO_STATS } from "@/lib/videoStats";
 import { ChevronLeft, ExternalLink, Github } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-export async function generateStaticParams() {
-  const projects = await getPublicProjects();
-  return projects.map((project) => ({
-    slug: project.slug,
-  }));
-}
+// export const dynamic = "force-static"; 
+// export async function generateStaticParams() { ... }
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
     const { slug } = await params;
