@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --no-lint",
     "start": "next start",
     "lint": "eslint"
   },
@@ -20,6 +20,8 @@
     "@radix-ui/react-select": "^2.2.6",
     "@sentry/nextjs": "^10.38.0",
     "@types/bcrypt": "^6.0.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.2",
     "bcrypt": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.9.0",
