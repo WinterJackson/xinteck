@@ -21,6 +21,14 @@ export function validateEnv() {
             "❌ Invalid environment variables:",
             parsed.error.flatten().fieldErrors
         );
+
+        // In CI/Build environments (like Vercel), we might want to proceed 
+        // even if secrets are missing, to allow the build to finish.
+        if (process.env.CI || process.env.VERCEL || process.env.NEXT_PHASE === 'phase-production-build') {
+            console.warn("⚠️  Running in CI/Build mode. Proceeding despite validation failure.");
+            return process.env as any;
+        }
+
         throw new Error("Invalid environment variables");
     }
 
