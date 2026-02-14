@@ -17,9 +17,5 @@ export default async function AiDashboardPage() {
         brandVoice: ""
     };
 
-    return (
-        <div className="p-8 max-w-7xl mx-auto">
-            <AiDashboardClient initialSettings={initialSettings} />
-        </div>
-    );
+    return <AiDashboardClient initialSettings={initialSettings} />;
 }
