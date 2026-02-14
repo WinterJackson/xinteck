@@ -46,7 +46,11 @@ export type AuditAction =
     | "newsletter.restore"
     | "contact.restore"
     | "service.reorder"
-    | "secret_update";
+    | "secret_update"
+    | "team.invite_user"
+    | "team.revoke_invitation"
+    | "team.resend_invitation"
+    | "user.register_accepted";
 
 interface AuditLogParams {
     action: AuditAction;
@@ -56,6 +60,10 @@ interface AuditLogParams {
     metadata?: Record<string, any>;
 }
 
+/*
+Purpose: Centralized audit logging mechanism to track critical system actions for security and compliance.
+Decision: We use a fire-and-forget approach (silent failure) to prevent non-critical logging errors from blocking main user flows (e.g., login should work even if logger is down).
+*/
 export async function logAudit({ action, entity, entityId, userId, metadata }: AuditLogParams) {
     try {
         await prisma.auditLog.create({
@@ -68,7 +76,7 @@ export async function logAudit({ action, entity, entityId, userId, metadata }: A
             },
         });
     } catch (error) {
-        // Fail silently to strict non-blocking of main flow, but log to console
+        // Purpose: Fail silently to ensure the primary business logic is never interrupted by logging failures.
         console.error("Audit Log Failure:", error);
     }
 }

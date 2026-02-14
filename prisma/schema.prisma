@@ -34,6 +34,7 @@ model User {
   auditLogs     AuditLog[]
   mediaFiles    MediaFile[]
   notifications Notification[]
+  invitations   Invitation[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -468,4 +469,35 @@ enum IdeaStatus {
   APPROVED
   REJECTED
   DRAFTED
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEAM MANAGEMENT & INVITATIONS
+// ═══════════════════════════════════════════════════════════════
+
+model Invitation {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  role      Role     @default(SUPPORT_STAFF)
+  
+  status    InvitationStatus @default(PENDING)
+  expiresAt DateTime
+  
+  invitedById String
+  invitedBy   User   @relation(fields: [invitedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([token])
+  @@index([status])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
 }

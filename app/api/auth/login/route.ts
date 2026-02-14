@@ -11,11 +11,15 @@ const loginSchema = z.object({
     rememberMe: z.boolean().optional(),
 });
 
+/*
+Purpose: Handle user login via API credentials.
+Decision: We validate input, verify password hash, and issue a secure HTTP-only cookie session to maintain stateless authentication relative to the server.
+*/
 export async function POST(req: Request) {
     try {
         const rawData = await req.json();
 
-        // 1. Validate input with Zod
+        // Purpose: Validate input structure before touching the database to prevent injection or malformed queries.
         const validation = loginSchema.safeParse(rawData);
         if (!validation.success) {
             return NextResponse.json({ error: validation.error.issues[0].message }, { status: 400 });
@@ -29,7 +33,10 @@ export async function POST(req: Request) {
         const isValid = await verifyPassword(password, user.passwordHash);
         if (!isValid) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
 
-        // 4. Create Session (Logic passed to lib could account for expiry, but here we control cookie)
+        /*
+        Purpose: Create a new session record.
+        Decision: We persist the session in the database to allow for server-side revocation (e.g., "Log out all devices").
+        */
         const { session, token } = await createSession(user);
 
         // 5. Update lastActiveAt
@@ -38,7 +45,7 @@ export async function POST(req: Request) {
             data: { lastActiveAt: new Date() }
         });
 
-        // 6. Audit Log
+        // Purpose: Log the successful login for security auditing and suspicious activity monitoring.
         await logAudit({
             action: "user.login",
             entity: "User",
@@ -50,7 +57,10 @@ export async function POST(req: Request) {
             }
         });
 
-        // 7. Set Cookie
+        /*
+        Purpose: Set the session cookie on the client.
+        Decision: HttpOnly and Secure flags are mandatory to prevent XSS theft and Man-in-the-Middle attacks.
+        */
         // 30 days if rememberMe, else 1 day (or session)
         const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24;
 

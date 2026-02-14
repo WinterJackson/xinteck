@@ -43,6 +43,10 @@ export interface PublicService {
 }
 
 
+/*
+Purpose: Fetch published blog posts for the public feed.
+Decision: Returns a simplified `PublicPost` interface to avoid leaking internal DB fields like `authorId` or `version`.
+*/
 export async function getPublicPosts(): Promise<PublicPost[]> {
     try {
         const posts = await prisma.blogPost.findMany({
@@ -62,6 +66,7 @@ export async function getPublicPosts(): Promise<PublicPost[]> {
             image: post.featuredImage || ""
         }));
     } catch (error) {
+        // Purpose: Fail gracefully (return empty array) to ensure the landing page never crashes due to DB errors.
         console.error("Failed to fetch public posts:", error);
         return [];
     }
@@ -177,6 +182,7 @@ export async function getFeaturedProject(): Promise<PublicProject | null> {
             };
         }
     } catch (error) {
+        // Purpose: Log the error but proceed to fallback to keep the site functional.
         console.warn("Database unavailable, returning fallback featured project:", error);
     }
 

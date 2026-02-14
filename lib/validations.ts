@@ -1,12 +1,15 @@
 import { z } from "zod";
 
-// ─── Shared Schemas ───────────────────────────────────────────────────────
+/*
+Purpose: Centralized Zod schemas for application-wide validation.
+Decision: We strictly sanitize inputs (trim/min/max) here to ensure database integrity and prevent injection attacks before data reaches the ORM.
+*/
 
 export const uuidSchema = z.string()
     .min(1, "Identifier is required")
     .trim();
 
-// ─── Auth Schemas ────────────────────────────────────────────────────────
+// Purpose: Auth schemas enforce strong password policies and email normalization.
 
 export const registerSchema = z.object({
     name: z.string().trim().min(2, "Name must be at least 2 characters").max(100, "Name too long"),
@@ -30,7 +33,7 @@ export const updateProfileSchema = z.object({
     avatar: z.string().trim().url("Invalid avatar URL").optional().nullable(),
 });
 
-// ─── Blog Schemas ────────────────────────────────────────────────────────
+// Purpose: Blog schemas handle complex content validation including slugs and optional metadata.
 
 export const blogPostSchema = z.object({
     title: z.string().trim().min(1, "Title is required").max(200, "Title too long"),
@@ -44,7 +47,7 @@ export const blogPostSchema = z.object({
     version: z.number().int().nonnegative().optional(),
 });
 
-// ─── Project Schemas ─────────────────────────────────────────────────────
+// Purpose: Project schemas ensure URL validity and client data consistency.
 
 export const projectSchema = z.object({
     title: z.string().trim().min(1, "Title is required").max(200, "Title too long"),
@@ -58,7 +61,7 @@ export const projectSchema = z.object({
     version: z.number().int().nonnegative().optional(),
 });
 
-// ─── Service Schemas ─────────────────────────────────────────────────────
+// Purpose: Service schemas validate complex nested feature arrays and JSON-stored section data.
 
 export const serviceSchema = z.object({
     name: z.string().trim().min(1, "Service name is required").max(100, "Name too long"),
@@ -128,7 +131,7 @@ export const serviceSchema = z.object({
     version: z.number().int().nonnegative().optional(),
 });
 
-// ─── Contact / Inbox Schemas ─────────────────────────────────────────────
+// Purpose: Contact schemas protect against spam and ensure messages meet minimum length requirements.
 
 export const contactSchema = z.object({
     name: z.string().trim().min(1, "Name is required").max(100, "Name too long"),
@@ -140,7 +143,7 @@ export const replySchema = z.object({
     content: z.string().trim().min(1, "Reply content is required").max(10000, "Reply too long"),
 });
 
-// ─── Staff Schemas ───────────────────────────────────────────────────────
+// Purpose: Staff schemas restrict role assignment to valid enums during invitation.
 
 export const inviteStaffSchema = z.object({
     email: z.string().trim().email("Valid email required"),
@@ -148,7 +151,7 @@ export const inviteStaffSchema = z.object({
     role: z.enum(["ADMIN", "SUPPORT_STAFF"]),
 });
 
-// ─── Settings Schemas ────────────────────────────────────────────────────
+// Purpose: Settings schemas validate environment configuration and public/private key-value pairs.
 
 export const settingSchema = z.object({
     key: z.string().trim().min(1, "Key is required").max(100, "Key too long"),
@@ -156,7 +159,7 @@ export const settingSchema = z.object({
 });
 
 export const siteSettingSchema = settingSchema.extend({
-    // Enhance key validation: Alphanumeric + underscores only, must not start with SECRET_ or PRIVATE_
+    // Purpose: Enforce uppercase naming convention for consistency and prevent "SECRET_" prefix to avoid accidental exposure of private keys.
     key: z.string().trim().min(1).max(100)
         .regex(/^[A-Z0-9_]+$/, "Key must be uppercase alphanumeric with underscores (e.g. SITE_NAME)")
         .refine(val => !val.startsWith("SECRET_") && !val.startsWith("PRIVATE_"), "Cannot start with SECRET_ or PRIVATE_"),

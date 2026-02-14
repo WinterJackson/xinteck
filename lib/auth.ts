@@ -7,20 +7,31 @@ const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'developme
 const SALT_ROUNDS = 10;
 const SESSION_EXPIRY = '7d';
 
+/*
+Purpose: Securely hash passwords before storage.
+Decision: Using bcrypt with 10 rounds balances security and performance reasonably well for this scale.
+*/
 export async function hashPassword(plain: string) {
     return bcrypt.hash(plain, SALT_ROUNDS);
 }
 
+// Purpose: Verify a plaintext password against the stored hash.
 export async function verifyPassword(plain: string, hash: string) {
     return bcrypt.compare(plain, hash);
 }
 
+/*
+Purpose: Create a stateful session for an authenticated user.
+Decision: We use a database-backed session (via Prisma) combined with a signed JWT to allowing both quick stateless validation (if needed) and server-side revocation.
+*/
 export async function createSession(user: Pick<User, 'id' | 'email' | 'role' | 'name'>) {
-    // Create DB session
+    // Purpose: Set session expiry to 7 days to reduce login friction for admins.
     const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    // Generate random token for session ID (opaque) or JWT?
-    // Using JWT allows carrying payload for quick access
+    /*
+    Purpose: Generate a signed JWT as the session token.
+    Decision: Signing the token prevents tampering, and the payload provides immediate context without a DB lookup in some edge layers.
+    */
     const token = await new SignJWT({
         sub: user.id,
         email: user.email,
@@ -32,7 +43,7 @@ export async function createSession(user: Pick<User, 'id' | 'email' | 'role' | '
         .setExpirationTime(SESSION_EXPIRY)
         .sign(JWT_SECRET);
 
-    // Store token in DB
+    // Purpose: Persist the session to allow for auditing and revocation (e.g., "Log out all devices").
     const session = await prisma.session.create({
         data: {
             userId: user.id,
@@ -46,11 +57,13 @@ export async function createSession(user: Pick<User, 'id' | 'email' | 'role' | '
 
 export async function verifySession(token: string) {
     try {
-        // 1. Verify signature
+        // Purpose: Cryptographically verify the token structure and signature first.
         const { payload } = await jwtVerify(token, JWT_SECRET);
 
-        // 2. Verify against DB session (ensure not revoked)
-        // Note: This makes it stateful, which is desired for admin security
+        /*
+        Purpose: Validate against the database to ensure the session hasn't been explicitly revoked.
+        Decision: This dual-check (crypto + DB) is the gold standard for secure, revokable sessions.
+        */
         const session = await prisma.session.findUnique({
             where: { token },
             include: { user: true },
@@ -70,6 +83,7 @@ export async function verifySession(token: string) {
     }
 }
 
+// Purpose: Terminate a session by removing it from the database, effectively logging the user out.
 export async function destroySession(token: string) {
     await prisma.session.deleteMany({
         where: { token }

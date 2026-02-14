@@ -1,36 +1,125 @@
 "use client";
 
-import { registerUser } from "@/actions/auth";
+import { registerUser, validateInvitation } from "@/actions/auth";
 import { PasswordInput } from "@/components/admin/ui/PasswordInput";
 import { motion } from "framer-motion";
-import { ArrowRight, Lock, Mail, User } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-
+import { ArrowRight, Lock, Mail, ShieldAlert, User } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
-export default function RegisterPage() {
-    const [formData, setFormData] = useState({ name: "", email: "", password: "" });
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState("");
+import { Suspense } from "react";
+
+/*
+Purpose: Internal component to handle the registration logic with search params.
+Decision: Separated to allow wrapping in Suspense for Next.js build compatibility.
+*/
+function RegisterContent() {
+    const searchParams = useSearchParams();
+    const token = searchParams.get("token");
     const router = useRouter();
+
+    const [formData, setFormData] = useState({ name: "", password: "" });
+    const [email, setEmail] = useState("");
+    const [role, setRole] = useState("");
+    const [invitedBy, setInvitedBy] = useState("");
+    
+    // Purpose: Track validation lifecycle to show appropriate UI states (Loading -> Form or Error).
+    // States: "validating" | "valid" | "invalid"
+    const [status, setStatus] = useState<"validating" | "valid" | "invalid">("validating");
+    const [statusMessage, setStatusMessage] = useState("");
+
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        if (!token) {
+            setStatus("invalid");
+            setStatusMessage("Registration is by invitation only.");
+            return;
+        }
+
+        // Purpose: validateInvitation is a server action. We call it here to verify the token before showing the form.
+        async function validate() {
+            try {
+                const res = await validateInvitation(token!);
+                if (res.valid) {
+                    setEmail(res.email!);
+                    setRole(res.role!);
+                    setInvitedBy(res.invitedBy || "Admin");
+                    setStatus("valid");
+                } else {
+                    setStatus("invalid");
+                    setStatusMessage(res.message || "Invalid invitation.");
+                }
+            } catch (e) {
+                setStatus("invalid");
+                setStatusMessage("Failed to validate invitation.");
+            }
+        }
+        validate();
+    }, [token]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsLoading(true);
+        setIsSubmitting(true);
         setError("");
 
         try {
-            await registerUser(formData);
+            await registerUser({ 
+                name: formData.name, 
+                password: formData.password,
+                token: token! 
+            });
             // Redirect to login
             router.push("/admin/login?registered=true");
         } catch (err: any) {
             setError(err.message || "Registration failed");
-            setIsLoading(false);
+            setIsSubmitting(false);
         }
     };
 
+    // Purpose: Block access if the token is invalid or missing.
+    // 1. INVALID STATE
+    if (status === "invalid") {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-4">
+                 <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="max-w-md w-full bg-[#111] border border-white/10 rounded-2xl p-8 text-center"
+                 >
+                    <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h2 className="text-xl font-bold mb-2">Access Denied</h2>
+                    <p className="text-white/60 mb-8">{statusMessage}</p>
+                    <Link 
+                        href="/admin/login"
+                        className="inline-flex items-center justify-center w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors"
+                    >
+                        Return to Login
+                    </Link>
+                 </motion.div>
+            </div>
+        );
+    }
+
+    // Purpose: Show a loading spinner while the server verifies the token.
+    // 2. VALIDATING STATE
+    if (status === "validating") {
+         return (
+            <div className="min-h-screen flex items-center justify-center bg-black text-white">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-white/40 text-sm">Verifying secure link...</p>
+                </div>
+            </div>
+         );
+    }
+
+    // 3. VALID STATE (Form)
     return (
         <div className="min-h-screen grid lg:grid-cols-2 bg-black text-white">
             {/* Left Side - Visuals */}
@@ -74,8 +163,11 @@ export default function RegisterPage() {
                     className="w-full max-w-md space-y-8"
                 >
                     <div className="text-center lg:text-left">
+                        <div className="inline-block px-3 py-1 bg-gold/10 border border-gold/20 rounded-full text-xs text-gold font-bold mb-4">
+                            You've been invited by {invitedBy}
+                        </div>
                         <h2 className="text-3xl font-bold tracking-tight text-white">Create Account</h2>
-                        <p className="mt-2 text-sm text-white/40">Join the Xinteck command center.</p>
+                        <p className="mt-2 text-sm text-white/40">Set up your credentials to join the team.</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -86,6 +178,24 @@ export default function RegisterPage() {
                         )}
 
                         <div className="space-y-4">
+                            {/* Read Only Email */}
+                            <div className="relative opacity-60">
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
+                                {/* 
+                                Purpose: Read-only email field.
+                                Decision: Prevent users from changing the email associated with the invitation token. 
+                                */}
+                                <input
+                                    type="email"
+                                    value={email}
+                                    disabled
+                                    className="w-full bg-white/5 border border-white/10 rounded-[10px] pl-10 pr-4 py-3 text-white cursor-not-allowed"
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-green-400 font-bold bg-green-900/40 px-2 py-0.5 rounded">
+                                    VERIFIED
+                                </div>
+                            </div>
+
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
                                 <input
@@ -95,20 +205,12 @@ export default function RegisterPage() {
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     className="w-full bg-white/5 border border-white/10 rounded-[10px] pl-10 pr-4 py-3 text-white placeholder:text-white/20 focus:border-gold/50 outline-none transition-all"
                                     required
+                                    autoFocus
                                 />
                             </div>
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
-                                <input
-                                    type="email"
-                                    placeholder="Email Address"
-                                    value={formData.email}
-                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-[10px] pl-10 pr-4 py-3 text-white placeholder:text-white/20 focus:border-gold/50 outline-none transition-all"
-                                    required
-                                />
-                            </div>
-                            <PasswordInput 
+                            
+                            <div className="flex flex-col gap-1">
+                                <PasswordInput 
                                     placeholder="Password"
                                     value={formData.password}
                                     onChange={e => setFormData({ ...formData, password: e.target.value })}
@@ -116,29 +218,42 @@ export default function RegisterPage() {
                                     required
                                     leftIcon={<Lock size={18} />}
                                 />
+                                <p className="text-[10px] text-white/30 px-1">
+                                    Must be at least 8 characters.
+                                </p>
+                            </div>
                         </div>
 
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isSubmitting}
                             className="w-full bg-gold text-black font-bold py-3 rounded-[10px] flex items-center justify-center gap-2 hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-[0_4px_14px_0_rgba(212,175,55,0.39)]"
                         >
-                            {isLoading ? (
+                            {isSubmitting ? (
                                 <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                             ) : (
-                                <>Create Account <ArrowRight size={18} /></>
+                                <>Complete Registration <ArrowRight size={18} /></>
                             )}
                         </button>
                     </form>
-
-                    <p className="text-center text-sm text-white/40">
-                        Already have an account?{" "}
-                        <Link href="/admin/login" className="text-gold hover:text-white transition-colors font-medium">
-                            Sign In
-                        </Link>
-                    </p>
                 </motion.div>
             </div>
         </div>
+    );
+}
+
+/*
+Purpose: Public-facing registration page gated by invitation tokens.
+Decision: We validate the token immediately on mount and lock the email field to ensure the user can only register for the invited identity.
+*/
+export default function RegisterPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-black text-white">
+                <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        }>
+            <RegisterContent />
+        </Suspense>
     );
 }

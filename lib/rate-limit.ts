@@ -2,9 +2,10 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-// Create a new ratelimiter, that'll be used to limit requests.
-// We use a sliding window of 10 requests per 10 seconds by default.
-// The user can pass in their own window and limit.
+/*
+Purpose: Abstract rate limiting logic using Upstash Redis.
+Decision: We use a sliding window algorithm to allow for burst tolerance while preventing abuse.
+*/
 export function createRateLimiter(
     requests: number = 10,
     windowDuration: `${number} s` | `${number} m` | `${number} h` | `${number} d` = "10 s"

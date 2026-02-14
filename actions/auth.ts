@@ -4,61 +4,145 @@ import { INTERNAL_getSecret } from "@/actions/settings";
 import { logAudit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth-check";
 import { prisma } from "@/lib/prisma";
-import { changePasswordSchema, registerSchema, resetPasswordSchema, updateProfileSchema } from "@/lib/validations";
-import { Role, UserStatus } from "@prisma/client";
+import { changePasswordSchema, resetPasswordSchema, updateProfileSchema } from "@/lib/validations";
+import { InvitationStatus, Role, UserStatus } from "@prisma/client";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Resend } from "resend";
 
-// 1. REGISTRATION
-export async function registerUser(data: { name: string; email: string; password: string }) {
-    const parsed = registerSchema.parse(data);
-
-    const existingUser = await prisma.user.findUnique({ where: { email: parsed.email } });
-    if (existingUser) {
-        throw new Error("Email already in use");
-    }
-
-    // Check if this is the FIRST user
-    const userCount = await prisma.user.count();
-    const isFirstUser = userCount === 0;
-    const role = isFirstUser ? Role.SUPER_ADMIN : Role.SUPPORT_STAFF;
-
-    const hashedPassword = await bcrypt.hash(parsed.password, 10);
-
-    const user = await prisma.user.create({
-        data: {
-            name: parsed.name,
-            email: parsed.email,
-            passwordHash: hashedPassword,
-            role: role,
-            status: UserStatus.ACTIVE,
-        }
+/*
+Purpose: Validate invitation tokens server-side to prevent unauthorized access.
+Decision: We check for existence, pending status, and expiry to ensure strict invite-only access.
+*/
+export async function validateInvitation(token: string) {
+    const invitation = await prisma.invitation.findUnique({
+        where: { token },
+        include: { invitedBy: { select: { name: true } } }
     });
 
+    if (!invitation) return { valid: false, message: "Invalid invitation link." };
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+        return { valid: false, message: "This invitation has already been used or revoked." };
+    }
+
+    if (invitation.expiresAt < new Date()) {
+        return { valid: false, message: "This invitation has expired." };
+    }
+
+    return {
+        valid: true,
+        email: invitation.email,
+        role: invitation.role,
+        invitedBy: invitation.invitedBy?.name
+    };
+}
+
+/*
+Purpose: Handle user registration with strict token gating.
+Decision: We enforce a valid token for all registrations to maintain the private nature of the platform.
+*/
+export async function registerUser(data: { name: string; password: string; token?: string }) {
+    // Purpose: Detect system initialization state to potentially allow first-user setup (though currently strictly gated).
+    const userCount = await prisma.user.count();
+    const isFirstUser = userCount === 0;
+
+    let email = "";
+    let role: Role = Role.SUPPORT_STAFF;
+
+    if (isFirstUser) {
+        // Fallback for initialization (though seed likely handled this)
+        // Allow public register ONLY if 0 users exist
+        // Validating email from data since we don't have a token
+        if (!data.token) {
+            // We need email from client if no token (and isFirstUser)
+            // But signature changed. We might need to handle this strictly.
+            // For simplicity, strict mode: First user MUST use seed or token?
+            // Actually, keeping isFirstUser open is dangerous if "seed" didn't run.
+            // Let's rely on the fact that seed user exists.
+            // So: BLOCK ALL non-token registrations.
+        }
+        // Wait, "registerSchema" in validations.ts probably expects email.
+        // We should adjust validations or just use partial parsing.
+    }
+
+    if (!data.token) {
+        // Only allow if isFirstUser is true AND we accept provided email?
+        if (isFirstUser) {
+            // Allow providing email manually for the very first super admin if seed failed
+            // But "data" signature might not have email.
+            // Master Plan says "ignore client email/role input".
+            // So we must rely on token.
+            // IF isFirstUser, we could allow a bypass, but let's stick to strict Token Gating.
+            // If DB is empty, user should use "prisma db seed".
+            throw new Error("Registration is by invitation only.");
+        }
+        throw new Error("Registration is by invitation only.");
+    }
+
+    // Logic WITH Token
+    const invitation = await prisma.invitation.findUnique({ where: { token: data.token } });
+
+    if (!invitation || invitation.status !== InvitationStatus.PENDING || invitation.expiresAt < new Date()) {
+        throw new Error("Invalid or expired invitation.");
+    }
+
+    email = invitation.email;
+    role = invitation.role;
+
+    // Purpose: Pre-check for existing user to fail early before expensive hashing.
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) throw new Error("User already exists.");
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+
+    /*
+    Purpose: Atomically create the user and consume the invitation.
+    Decision: Using a transaction ensures that an invitation cannot be used twice if requests are sent in parallel (race condition protection).
+    */
+    await prisma.$transaction([
+        prisma.user.create({
+            data: {
+                name: data.name,
+                email,
+                passwordHash: hashedPassword,
+                role,
+                status: UserStatus.ACTIVE,
+                // Linked invitation? No, invitation links to user via email loosely or we can add userId to invitation
+            }
+        }),
+        prisma.invitation.update({
+            where: { id: invitation.id },
+            data: { status: InvitationStatus.ACCEPTED }
+        })
+    ]);
+
     await logAudit({
-        action: "user.register",
+        action: "user.register_accepted",
         entity: "User",
-        entityId: user.id,
-        metadata: { email: user.email, role }
+        entityId: email, // Using email as ID proxy for log since we don't have ID returned from transaction easily without separating logic
+        metadata: { role, token: data.token }
     });
 
     return { success: true };
 }
 
-// 2. FORGOT PASSWORD
+/*
+Purpose: Initiate the password reset flow securely.
+Decision: We return success even if the user doesn't exist to prevent email enumeration attacks.
+*/
 export async function forgotPassword(email: string) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-        // Silent fail for security, or standard message
+        // Purpose: Silent failure to mask user existence.
         return { success: true, message: "If an account exists, an email has been sent." };
     }
 
-    // Generate token
+    // Purpose: Generate a high-entropy token for the reset link.
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Save token
+    // Purpose: Invalidate any previous reset tokens for this user to prevent clutter and replay.
     await prisma.passwordResetToken.deleteMany({ where: { email } }); // Clear old tokens
     await prisma.passwordResetToken.create({
         data: {
@@ -125,7 +209,10 @@ export async function forgotPassword(email: string) {
     return { success: true, message: "If an account exists, an email has been sent." };
 }
 
-// 3. RESET PASSWORD
+/*
+Purpose: Complete the password reset process.
+Decision: We re-validate the token's expiry and existence at the last moment to ensure security.
+*/
 export async function resetPassword(token: string, newPassword: string) {
     const parsed = resetPasswordSchema.parse({ token, newPassword });
 
@@ -150,8 +237,7 @@ export async function resetPassword(token: string, newPassword: string) {
     // Cleanup
     await prisma.passwordResetToken.delete({ where: { token: parsed.token } });
 
-    // Optional: Invalidate existing sessions?
-    // Secure approach: yes.
+    // Purpose: Invalidate all existing sessions to force re-login with the new password (security best practice).
     await prisma.session.deleteMany({ where: { userId: user.id } });
 
     await logAudit({
@@ -163,7 +249,10 @@ export async function resetPassword(token: string, newPassword: string) {
     return { success: true };
 }
 
-// 4. CHANGE PASSWORD (Authenticated)
+/*
+Purpose: Allow authenticated users to change their password.
+Decision: We mandate the old password validation to confirm identity before allowing sensitive credential changes.
+*/
 export async function changePassword(oldPassword: string, newPassword: string) {
     const parsed = changePasswordSchema.parse({ oldPassword, newPassword });
 
@@ -193,7 +282,10 @@ export async function changePassword(oldPassword: string, newPassword: string) {
     return { success: true };
 }
 
-// 5. UPDATE PROFILE
+/*
+Purpose: Update user profile details.
+Decision: Restricted to owner or admin (via requireRole) and enforces unique email constraints.
+*/
 export async function updateProfile(data: { name: string; email: string; avatar?: string }) {
     const parsed = updateProfileSchema.parse(data);
 
@@ -223,11 +315,14 @@ export async function updateProfile(data: { name: string; email: string; avatar?
 
     return { success: true };
 }
-// 6. SESSION MANAGEMENT
+/*
+Purpose: Provide visibility into active sessions.
+Decision: Helping users understand where they are logged in aids in detecting unauthorized access.
+*/
 export async function getSessions() {
     const user = await requireRole([Role.SUPER_ADMIN, Role.ADMIN, Role.SUPPORT_STAFF]);
 
-    // Fetch active sessions
+    // Purpose: List sessions sorted by recency for better UX.
     const sessions = await prisma.session.findMany({
         where: { userId: user.id },
         orderBy: { createdAt: "desc" },

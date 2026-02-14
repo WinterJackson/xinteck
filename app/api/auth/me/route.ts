@@ -2,6 +2,10 @@ import { verifySession } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+/*
+Purpose: Endpoint for the client to verify its current session state.
+Decision: Returns minimal user profile data to allow the UI to adapt (e.g., show avatar/name) without exposing sensitive fields.
+*/
 export async function GET(req: Request) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session_token')?.value;
