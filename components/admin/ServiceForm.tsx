@@ -259,20 +259,16 @@ export function ServiceForm({ service }: ServiceFormProps) {
 
                             <div className="flex flex-col gap-1 md:gap-2">
                                 <label className="text-[8px] md:text-xs font-bold text-white/60 uppercase">Service Caricature / Image</label>
-                                <div className="flex gap-4 items-start">
-                                    <div className="flex-1 flex gap-2">
+                                <div className="flex flex-col gap-3 w-full">
+                                    <div className="w-full flex gap-2">
                                         <input 
                                             value={formData.image || ""}
                                             onChange={(e) => setFormData({...formData, image: e.target.value})}
                                             placeholder="/images/services/..." 
-                                            className="w-full bg-white/5 border border-white/10 rounded-[8px] px-3 py-2 text-white text-sm outline-none focus:border-gold/50 font-mono placeholder:text-white/20"
+                                            className="flex-1 bg-white/5 border border-white/10 rounded-[8px] px-3 py-2 text-white text-sm outline-none focus:border-gold/50 font-mono placeholder:text-white/20"
                                         />
                                         <button 
                                             onClick={() => {
-                                                // We need a way to distinguish which picker is open or reuse the strict boolean.
-                                                // Since simple bool state is used, adding a secondary state or just reusing for now.
-                                                // Let's create a dedicated state for main image picker in next step if needed,
-                                                // or strictly manage via a "pickingFor" state.
                                                 setPickerTarget('main');
                                                 setShowMediaPicker(true);
                                             }}
@@ -283,7 +279,7 @@ export function ServiceForm({ service }: ServiceFormProps) {
                                         </button>
                                     </div>
                                     {formData.image && (
-                                        <div className="relative w-[300px] h-[300px] rounded-[12px] overflow-hidden border border-white/10 shrink-0 bg-black/50 shadow-xl">
+                                        <div className="relative w-full aspect-square max-w-[300px] rounded-[12px] overflow-hidden border border-white/10 bg-black/50 shadow-xl">
                                             <Image 
                                                 src={formData.image} 
                                                 alt="Preview" 
