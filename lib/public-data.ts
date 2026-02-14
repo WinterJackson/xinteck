@@ -39,6 +39,7 @@ export interface PublicService {
     stats?: any[];
     process?: any[]; // Mapped from section4?
     cta?: any;
+    image?: string | null;
 }
 
 
@@ -191,6 +192,7 @@ export async function getPublicService(slug: string): Promise<PublicService | nu
         title: s.name,
         subName: s.subName,
         description: s.description,
+        image: (s as any).image,
         features: s.features,
         capabilitiesTitle: details.title || "WHAT WE BUILD.",
         process: section4.steps || [], // Assuming section4 has steps

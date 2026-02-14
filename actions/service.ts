@@ -44,11 +44,24 @@ export async function getServices(params: ServiceFilter = {}): Promise<Paginated
 
 import { uuidSchema } from "@/lib/validations";
 
-export async function getService(id: string) {
+export async function getService(identifier: string) {
     await requireRole([Role.ADMIN, Role.SUPER_ADMIN, Role.SUPPORT_STAFF]);
-    const validatedId = uuidSchema.parse(id);
+
+    // First, try to find by ID (CUID or UUID)
+    // CUIDs typically start with 'c' and are ~25 chars. UUIDs are 36 chars.
+    // We'll trust the database to find it by ID first.
+    const serviceById = await prisma.service.findUnique({
+        where: { id: identifier }
+    });
+
+    if (serviceById) {
+        return serviceById;
+    }
+
+    // If not found by ID, try generic slug lookup
+    // This allows /admin/services/[slug] to work
     return await prisma.service.findUnique({
-        where: { id: validatedId }
+        where: { slug: identifier }
     });
 }
 

@@ -39,7 +39,8 @@ const services = [
             returnPolicy: "30-day bug fix warranty included."
         },
         isActive: true,
-        sortOrder: 1
+        sortOrder: 1,
+        image: "/images/services/web_dev_caricature_1771020665861.png"
     },
     {
         slug: "mobile-app-development",
@@ -72,7 +73,8 @@ const services = [
             returnPolicy: "Post-launch crash monitoring included."
         },
         isActive: true,
-        sortOrder: 2
+        sortOrder: 2,
+        image: "/images/services/mobile_app_caricature_1771020693351.png"
     },
     {
         slug: "custom-software-development",
@@ -105,7 +107,8 @@ const services = [
             returnPolicy: "SLA-backed support agreements."
         },
         isActive: true,
-        sortOrder: 3
+        sortOrder: 3,
+        image: "/images/services/custom_software_caricature_1771020721906.png"
     },
     {
         slug: "ui-ux-design",
@@ -138,7 +141,8 @@ const services = [
             returnPolicy: "Unlimited revisions during design phase."
         },
         isActive: true,
-        sortOrder: 4
+        sortOrder: 4,
+        image: "/images/services/ui_ux_caricature_1771020743886.png"
     },
     {
         slug: "cloud-devops",
@@ -171,7 +175,8 @@ const services = [
             returnPolicy: "Monthly performance reports."
         },
         isActive: true,
-        sortOrder: 5
+        sortOrder: 5,
+        image: "/images/services/cloud_devops_caricature_1771021166591.png"
     }
 ];
 

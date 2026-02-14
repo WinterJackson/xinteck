@@ -9,17 +9,19 @@ import { v2 as cloudinary } from "cloudinary";
 import { revalidatePath } from "next/cache";
 
 import { createPaginatedResult, getPaginationParams, PaginatedResponse, PaginationParams } from "@/lib/pagination";
+import { uuidSchema } from "@/lib/validations";
 
 export type MediaFilter = PaginationParams & {
     search?: string;
-    type?: "image" | "document" | "all";
+    type?: "image" | "document" | "video" | "all";
+    folderId?: string | null;
 };
 
 export async function getMediaFiles(params: MediaFilter = {}): Promise<PaginatedResponse<any>> {
     await requireRole([Role.ADMIN, Role.SUPER_ADMIN, Role.SUPPORT_STAFF]);
 
     const { page, pageSize: limit, skip } = getPaginationParams(params);
-    const { search, type } = params;
+    const { search, type, folderId } = params;
 
     const where: any = { deletedAt: null };
 
@@ -27,11 +29,28 @@ export async function getMediaFiles(params: MediaFilter = {}): Promise<Paginated
         where.originalName = { contains: search, mode: 'insensitive' };
     }
 
-    if (type && type !== "all") {
+    // ─── FILTER MODE vs NAVIGATION MODE ───
+
+    const isFilterMode = type && type !== "all";
+
+    if (isFilterMode) {
+        // FILTER MODE: Ignore folder structure, show flat list by type
         if (type === "image") {
             where.mimeType = { startsWith: "image/" };
-        } else {
-            where.mimeType = { not: { startsWith: "image/" } };
+        } else if (type === "video") {
+            where.mimeType = { startsWith: "video/" };
+        } else if (type === "document") {
+            // Documents are anything that isn't an image or video
+            where.AND = [
+                { mimeType: { not: { startsWith: "image/" } } },
+                { mimeType: { not: { startsWith: "video/" } } }
+            ];
+        }
+    } else {
+        // NAVIGATION MODE (All Files): Respect specific folder
+        if (!search) {
+            // Only apply folder constraint if NOT searching 
+            where.folderId = folderId;
         }
     }
 
@@ -50,15 +69,89 @@ export async function getMediaFiles(params: MediaFilter = {}): Promise<Paginated
         id: f.id,
         name: f.originalName,
         size: formatBytes(f.size),
-        type: f.mimeType.startsWith('image/') ? 'image' : 'document',
+        type: f.mimeType.startsWith('image/') ? 'image' : f.mimeType.startsWith('video/') ? 'video' : 'document',
         date: f.createdAt.toLocaleDateString(),
-        url: f.url
+        url: f.url,
+        folderId: f.folderId,
+        mimeType: f.mimeType
     }));
 
     return createPaginatedResult(data, total, page, limit);
 }
 
-export async function uploadFile(formData: FormData) {
+// ─── FOLDER ACTIONS ───
+
+export async function getFolders(parentId: string | null = null) {
+    await requireRole([Role.ADMIN, Role.SUPER_ADMIN, Role.SUPPORT_STAFF]);
+    return await prisma.mediaFolder.findMany({
+        where: { parentId },
+        orderBy: { name: 'asc' },
+        include: { _count: { select: { files: true } } }
+    });
+}
+
+export async function createFolder(name: string, parentId: string | null = null) {
+    const user = await requireRole([Role.ADMIN, Role.SUPER_ADMIN]);
+
+    // Check dupe
+    const existing = await prisma.mediaFolder.findFirst({
+        where: { name, parentId }
+    });
+    if (existing) throw new Error("Folder already exists");
+
+    const folder = await prisma.mediaFolder.create({
+        data: { name, parentId }
+    });
+
+    await logAudit({
+        action: "media.folder_create",
+        entity: "MediaFolder",
+        entityId: folder.id,
+        userId: user.id,
+        metadata: { name, parentId }
+    });
+
+    return folder;
+}
+
+export async function deleteFolder(id: string) {
+    const user = await requireRole([Role.SUPER_ADMIN, Role.ADMIN]);
+    const validatedId = uuidSchema.parse(id);
+
+    const folder = await prisma.mediaFolder.findUnique({
+        where: { id: validatedId },
+    });
+
+    if (!folder) return;
+
+    // 1. Move files to root (or parent)
+    // We choose root (null) for safety to ensure they are visible at top level
+    await prisma.mediaFile.updateMany({
+        where: { folderId: validatedId },
+        data: { folderId: folder.parentId }
+    });
+
+    // 2. Move subfolders to root (or parent) to prevent FK constraint failure
+    await prisma.mediaFolder.updateMany({
+        where: { parentId: validatedId },
+        data: { parentId: folder.parentId }
+    });
+
+    // 3. Delete the folder
+    await prisma.mediaFolder.delete({ where: { id: validatedId } });
+
+    await logAudit({
+        action: "media.folder_delete",
+        entity: "MediaFolder",
+        entityId: validatedId,
+        userId: user.id,
+        metadata: { name: folder.name }
+    });
+
+    revalidatePath("/admin/files");
+}
+
+export async function uploadFile(formData: FormData, folderId?: string) {
     const user = await requireRole([Role.ADMIN, Role.SUPER_ADMIN]);
 
     const file = formData.get("file") as File;
@@ -67,12 +160,16 @@ export async function uploadFile(formData: FormData) {
     }
 
     // ─── VALIDATION ───
-    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB (Increased for video support)
     const ALLOWED_MIME_TYPES = [
         "image/jpeg",
         "image/png",
         "image/webp",
-        "application/pdf"
+        "image/gif",
+        "application/pdf",
+        "video/mp4",
+        "video/webm",
+        "video/quicktime"
     ];
 
     if (file.size > MAX_SIZE) {
@@ -80,7 +177,7 @@ export async function uploadFile(formData: FormData) {
     }
 
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-        throw new Error("Invalid file type. Only JPEG, PNG, WEBP, and PDF are allowed.");
+        throw new Error("Invalid file type. Allowed: Images, PDF, MP4, WebM, MOV.");
     }
 
     const bytes = await file.arrayBuffer();
@@ -108,8 +205,8 @@ export async function uploadFile(formData: FormData) {
             const uploadStream = cloudinary.uploader.upload_stream(
                 {
                     folder: "xinteck_uploads",
-                    resource_type: "auto", // Handle images, videos, raw files
-                    public_id: file.name.split('.')[0] + "_" + Date.now(), // simple unique name logic
+                    resource_type: "auto", // Handle images, videos, raw files key for video support
+                    public_id: file.name.split('.')[0] + "_" + Date.now(),
                 },
                 (error, result) => {
                     if (error) reject(error);
@@ -127,7 +224,8 @@ export async function uploadFile(formData: FormData) {
                 mimeType: file.type,
                 size: result.bytes,
                 url: result.secure_url,
-                uploadedById: user.id
+                uploadedById: user.id,
+                folderId: folderId || null
             }
         });
 
@@ -151,8 +249,6 @@ export async function uploadFile(formData: FormData) {
     }
 }
 
-import { uuidSchema } from "@/lib/validations";
-
 export async function deleteFile(id: string) {
     const user = await requireRole([Role.ADMIN, Role.SUPER_ADMIN]);
     const validatedId = uuidSchema.parse(id);
@@ -171,9 +267,13 @@ export async function deleteFile(id: string) {
 
         if (cloud_name && api_key && api_secret) {
             cloudinary.config({ cloud_name, api_key, api_secret, secure: true });
-            // Use publicId for proper Cloudinary deletion
+
+            // Determine resource type for deletion (video/image)
+            const resourceType = file.mimeType.startsWith('video/') ? 'video' : 'image';
+            // Note: Cloudinary default is 'image', need to specify if video
+
             const publicId = file.publicId || file.name;
-            await cloudinary.uploader.destroy(publicId);
+            await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
         }
     } catch (e) {
         console.error("Failed to delete file from Cloudinary:", e);
@@ -199,3 +299,4 @@ function formatBytes(bytes: number, decimals = 2) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
+

@@ -27,6 +27,8 @@ export type AuditAction =
     | "user.delete"
     | "media.upload"
     | "media.delete"
+    | "media.folder_create"
+    | "media.folder_delete"
     | "service.create"
     | "service.update"
     | "service.delete"

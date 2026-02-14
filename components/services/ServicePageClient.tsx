@@ -76,7 +76,7 @@ export function ServicePageClient({ service }: { service: PublicService }) {
             </motion.div>
 
             {/* Injected Mockup Component */}
-            <MockupComponent />
+            <MockupComponent imageSrc={service.image} />
           </div>
         </section>
 

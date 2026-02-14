@@ -1,10 +1,9 @@
-"use client";
-
-import { getMediaFiles } from "@/actions/media";
+import { getMediaFiles, uploadFile } from "@/actions/media";
 import { Button } from "@/components/admin/ui/Button";
-import { Image as ImageIcon, Search, X } from "lucide-react";
+import { useToast } from "@/components/admin/ui/Toast";
+import { Image as ImageIcon, Loader2, Search, UploadCloud, X } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 
 interface MediaPickerProps {
@@ -16,10 +15,14 @@ interface MediaPickerProps {
 export function MediaPicker({ isOpen, onClose, onSelect }: MediaPickerProps) {
     const [files, setFiles] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [isDragging, setIsDragging] = useState(false);
     const [isPending, startTransition] = useTransition();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { toast } = useToast();
 
-    const loadFiles = () => {
+    const loadFiles = useCallback(() => {
         setLoading(true);
         startTransition(async () => {
             try {
@@ -32,18 +35,80 @@ export function MediaPicker({ isOpen, onClose, onSelect }: MediaPickerProps) {
                 setFiles(result.data);
             } catch (error) {
                 console.error("Failed to load media:", error);
+                toast("Failed to load media library", "error");
             } finally {
                 setLoading(false);
             }
         });
+    }, [searchQuery, toast]);
+
+    const handleUploadFile = async (file: File) => {
+        if (!file) return;
+
+        // Optimistic UI checks
+        if (!file.type.startsWith('image/')) {
+            toast("Only image files are allowed", "error");
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            toast("File is too large (Max 10MB)", "error");
+            return;
+        }
+
+        setUploading(true);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const result = await uploadFile(formData);
+            if (result.success && result.url) {
+                toast("Image uploaded successfully", "success");
+                loadFiles(); 
+            }
+        } catch (error) {
+            console.error("Upload failed", error);
+            toast("Upload failed. Please try again.", "error");
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+        }
     };
+
+    const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) handleUploadFile(file);
+    };
+
+    // Drag & Drop Handlers
+    const onDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    }, []);
+
+    const onDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    }, []);
+
+    const onDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) handleUploadFile(file);
+    }, []);
 
     // Trigger load on open or search change (debounced manually or by user action)
     useEffect(() => {
         if (isOpen) {
             loadFiles();
         }
-    }, [isOpen]); 
+    }, [isOpen, loadFiles]); 
 
 
     if (!isOpen) return null;
@@ -51,7 +116,21 @@ export function MediaPicker({ isOpen, onClose, onSelect }: MediaPickerProps) {
     // Portal to body to ensure it's on top
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#111] border border-white/10 rounded-[16px] w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div 
+                className={`bg-[#111] border transition-colors rounded-[16px] w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 relative ${isDragging ? 'border-gold ring-2 ring-gold/20 bg-[#1a1a1a]' : 'border-white/10'}`}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+            >
+                {/* Drag Overlay */}
+                {isDragging && (
+                    <div className="absolute inset-0 bg-gold/10 z-50 flex items-center justify-center pointer-events-none">
+                        <div className="bg-[#111] p-6 rounded-[12px] border border-gold text-gold flex flex-col items-center animate-bounce">
+                            <UploadCloud size={48} className="mb-2" />
+                            <span className="font-bold text-lg">Drop image to upload</span>
+                        </div>
+                    </div>
+                )}
                 
                 {/* Header */}
                 <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
@@ -65,8 +144,8 @@ export function MediaPicker({ isOpen, onClose, onSelect }: MediaPickerProps) {
                 </div>
 
                 {/* Toolbar */}
-                <div className="p-4 border-b border-white/10 flex gap-4">
-                    <div className="relative flex-1">
+                <div className="p-4 border-b border-white/10 flex gap-4 flex-wrap">
+                    <div className="relative flex-1 min-w-[200px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={16} />
                         <input 
                             value={searchQuery}
@@ -76,25 +155,60 @@ export function MediaPicker({ isOpen, onClose, onSelect }: MediaPickerProps) {
                             className="w-full bg-white/5 border border-white/10 rounded-[8px] pl-9 pr-4 py-2 text-white text-sm outline-none focus:border-gold/50 placeholder:text-white/20"
                         />
                     </div>
-                    <Button variant="outline" onClick={loadFiles} disabled={loading}>
+                    <Button variant="outline" onClick={loadFiles} disabled={loading || uploading}>
                         Search
+                    </Button>
+                    
+                    <div className="w-px bg-white/10 mx-2 hidden md:block" />
+
+                    <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={onInputChange}
+                    />
+                    <Button 
+                        onClick={() => fileInputRef.current?.click()} 
+                        disabled={uploading}
+                        className="bg-gold text-black hover:bg-white"
+                    >
+                        {uploading ? (
+                            <><Loader2 className="animate-spin mr-2" size={16} /> Uploading...</>
+                        ) : (
+                            <><UploadCloud className="mr-2" size={16} /> Upload New</>
+                        )}
                     </Button>
                 </div>
 
                 {/* Grid */}
                 <div className="flex-1 overflow-y-auto p-4 bg-black/20">
-                    {loading ? (
+                    {loading && !uploading ? (
                         <div className="flex items-center justify-center h-40 text-white/40">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold mr-2" />
                             Loading library...
                         </div>
-                    ) : files.length === 0 ? (
+                    ) : files.length === 0 && !loading ? (
                         <div className="flex flex-col items-center justify-center h-40 text-white/40">
                             <ImageIcon size={32} className="mb-2 opacity-50" />
                             <p>No images found.</p>
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="text-gold text-xs hover:underline mt-2"
+                            >
+                                Upload your first image
+                            </button>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                            {uploading && (
+                                <div className="aspect-square bg-white/5 rounded-[8px] border border-white/10 border-dashed flex items-center justify-center animate-pulse">
+                                    <div className="flex flex-col items-center text-white/50">
+                                        <Loader2 className="animate-spin mb-2" size={24} />
+                                        <span className="text-xs">Uploading...</span>
+                                    </div>
+                                </div>
+                            )}
                             {files.map((file) => (
                                 <button
                                     key={file.id}
@@ -123,7 +237,10 @@ export function MediaPicker({ isOpen, onClose, onSelect }: MediaPickerProps) {
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-white/10 bg-white/5 flex justify-end">
+                <div className="p-4 border-t border-white/10 bg-white/5 flex justify-between items-center">
+                     <p className="text-[10px] text-white/40">
+                        Drag & Drop an image anywhere, or use the button.
+                     </p>
                      <Button variant="ghost" onClick={onClose}>Cancel</Button>
                 </div>
             </div>

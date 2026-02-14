@@ -3,7 +3,6 @@ import { z } from "zod";
 // ─── Shared Schemas ───────────────────────────────────────────────────────
 
 export const uuidSchema = z.string()
-    .uuid("Invalid identifier format")
     .min(1, "Identifier is required")
     .trim();
 
@@ -64,6 +63,7 @@ export const projectSchema = z.object({
 export const serviceSchema = z.object({
     name: z.string().trim().min(1, "Service name is required").max(100, "Name too long"),
     subName: z.string().trim().max(200, "Sub name too long").optional().nullable(),
+    image: z.string().trim().url("Invalid image URL").optional().nullable().or(z.literal("")),
     slug: z.string().trim().min(1, "Slug is required").max(100, "Slug too long")
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be lowercase with hyphens only"),
     price: z.string().trim().max(50, "Price too long").optional().nullable(),

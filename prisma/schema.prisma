@@ -184,6 +184,7 @@ model Service {
   subName     String
   price       String?
   description String
+  image       String? // URL to service caricature/icon
   themeColor  String
 
   features         String[]
@@ -295,9 +296,29 @@ model MediaFile {
   createdAt DateTime  @default(now())
   deletedAt DateTime? // Soft delete
 
+  folderId String?
+  mediaFolder MediaFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   @@index([folder])
   @@index([mimeType])
   @@index([uploadedById])
+  @@index([folderId])
+}
+
+model MediaFolder {
+  id        String   @id @default(cuid())
+  name      String
+  
+  parentId  String?
+  parent    MediaFolder? @relation("SubFolders", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children  MediaFolder[] @relation("SubFolders")
+
+  files     MediaFile[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, parentId])
 }
 
 // ═══════════════════════════════════════════════════════════════

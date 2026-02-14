@@ -22,8 +22,17 @@ type ServiceFormValues = z.infer<typeof serviceSchema>;
 
 // Helper to safely cast JSON to specific types
 function safeCast<T>(data: any, fallback: T): T {
-    if (!data || typeof data !== 'object') return fallback;
-    return { ...fallback, ...data } as T;
+    if (!data) return fallback;
+    
+    if (Array.isArray(fallback)) {
+        return Array.isArray(data) ? (data as unknown as T) : fallback;
+    }
+    
+    if (typeof data === 'object' && data !== null) {
+        return { ...fallback, ...data } as T;
+    }
+    
+    return fallback;
 }
 
 interface ServiceFormProps {
@@ -36,6 +45,7 @@ export function ServiceForm({ service }: ServiceFormProps) {
     const [isPending, startTransition] = useTransition();
     const [error, setError] = useState("");
     const [showMediaPicker, setShowMediaPicker] = useState(false);
+    const [pickerTarget, setPickerTarget] = useState<'main' | 'section1' | null>(null);
 
     // Initial Values with Safe Casting
     const initialSection1 = safeCast<ServiceSection>(service?.section1, { title: "" });
@@ -54,6 +64,7 @@ export function ServiceForm({ service }: ServiceFormProps) {
         subName: service?.subName || "",
         slug: service?.slug || "",
         description: service?.description || "",
+        image: (service as any)?.image || "", // Add image field
         themeColor: service?.themeColor || "#B8860B", // Default to Gold
         
         // Flattened JSON Sections
@@ -101,6 +112,7 @@ export function ServiceForm({ service }: ServiceFormProps) {
                     subName: formData.subName,
                     slug: formData.slug,
                     description: formData.description,
+                    image: formData.image, // Include image in payload
                     themeColor: formData.themeColor,
                     version: formData.version, // Pass version
 
@@ -188,7 +200,14 @@ export function ServiceForm({ service }: ServiceFormProps) {
             <MediaPicker 
                 isOpen={showMediaPicker} 
                 onClose={() => setShowMediaPicker(false)} 
-                onSelect={(url) => setFormData({ ...formData, section1Image: url })} 
+                onSelect={(url) => {
+                    if (pickerTarget === 'main') {
+                        setFormData({ ...formData, image: url });
+                    } else if (pickerTarget === 'section1') {
+                         setFormData({ ...formData, section1Image: url });
+                    }
+                    setShowMediaPicker(false);
+                }} 
             />
 
             {/* Action Bar */}
@@ -233,6 +252,48 @@ export function ServiceForm({ service }: ServiceFormProps) {
                                     placeholder="e.g. Web Development" 
                                     className="bg-white/5 border border-white/10 rounded-[8px] px-3 md:px-4 py-2 md:py-3 text-white text-sm md:text-lg font-bold outline-none focus:border-gold/50 placeholder:font-normal placeholder:text-white/20"
                                 />
+                            </div>
+                            
+                            
+
+
+                            <div className="flex flex-col gap-1 md:gap-2">
+                                <label className="text-[8px] md:text-xs font-bold text-white/60 uppercase">Service Caricature / Image</label>
+                                <div className="flex gap-4 items-start">
+                                    <div className="flex-1 flex gap-2">
+                                        <input 
+                                            value={formData.image || ""}
+                                            onChange={(e) => setFormData({...formData, image: e.target.value})}
+                                            placeholder="/images/services/..." 
+                                            className="w-full bg-white/5 border border-white/10 rounded-[8px] px-3 py-2 text-white text-sm outline-none focus:border-gold/50 font-mono placeholder:text-white/20"
+                                        />
+                                        <button 
+                                            onClick={() => {
+                                                // We need a way to distinguish which picker is open or reuse the strict boolean.
+                                                // Since simple bool state is used, adding a secondary state or just reusing for now.
+                                                // Let's create a dedicated state for main image picker in next step if needed,
+                                                // or strictly manage via a "pickingFor" state.
+                                                setPickerTarget('main');
+                                                setShowMediaPicker(true);
+                                            }}
+                                            className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-[8px] transition-colors"
+                                            title="Select Image"
+                                        >
+                                            <ImageIcon size={18} />
+                                        </button>
+                                    </div>
+                                    {formData.image && (
+                                        <div className="relative w-[300px] h-[300px] rounded-[12px] overflow-hidden border border-white/10 shrink-0 bg-black/50 shadow-xl">
+                                            <Image 
+                                                src={formData.image} 
+                                                alt="Preview" 
+                                                fill 
+                                                className="object-contain p-2" 
+                                                onError={(e) => e.currentTarget.style.display = 'none'}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             
                             <div className="grid md:grid-cols-2 gap-3 md:gap-4">
@@ -303,7 +364,10 @@ export function ServiceForm({ service }: ServiceFormProps) {
                                                     className="w-full bg-white/5 border border-white/10 rounded-[8px] px-3 py-2 text-white text-sm focus:border-gold/50 placeholder:text-white/20 outline-none font-mono"
                                                 />
                                                 <button 
-                                                    onClick={() => setShowMediaPicker(true)}
+                                                    onClick={() => {
+                                                        setPickerTarget('section1');
+                                                        setShowMediaPicker(true);
+                                                    }}
                                                     className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-[8px] transition-colors"
                                                     title="Select Image"
                                                 >
