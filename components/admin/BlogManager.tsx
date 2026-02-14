@@ -6,7 +6,7 @@ import { RoleGate } from "@/components/admin/RoleGate";
 import { ConfirmDialog, PageContainer, PageHeader } from "@/components/admin/ui";
 import { Select } from "@/components/admin/ui/Select";
 import { Role } from "@prisma/client";
-import { FileText, LayoutGrid, List, Plus, Search, Trash2 } from "lucide-react";
+import { FileText, LayoutGrid, List, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -121,10 +121,16 @@ export function BlogManager({ initialData }: BlogManagerProps) {
         subtitle={`Create, edit, and manage your articles. Total: ${meta.total}`}
         actions={
           <RoleGate allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN]}>
-              <Link href="/admin/blog/new" className="bg-gold text-black font-bold px-3 py-1.5 md:px-6 md:py-3 text-[10px] md:text-sm rounded-[10px] flex items-center gap-1 md:gap-2 hover:bg-white transition-colors shadow-[0_4px_14px_0_rgba(212,175,55,0.39)] whitespace-nowrap">
-                <Plus size={14} className="md:w-[18px] md:h-[18px]" />
-                New Post
-              </Link>
+              <div className="flex gap-2">
+                <Link href="/admin/blog/ai" className="bg-white/10 text-white font-bold px-3 py-1.5 md:px-6 md:py-3 text-[10px] md:text-sm rounded-[10px] flex items-center gap-1 md:gap-2 hover:bg-white/20 transition-colors whitespace-nowrap border border-white/10">
+                    <Sparkles size={14} className="md:w-[18px] md:h-[18px] text-purple-400" />
+                    AI Assistant
+                </Link>
+                <Link href="/admin/blog/new" className="bg-gold text-black font-bold px-3 py-1.5 md:px-6 md:py-3 text-[10px] md:text-sm rounded-[10px] flex items-center gap-1 md:gap-2 hover:bg-white transition-colors shadow-[0_4px_14px_0_rgba(212,175,55,0.39)] whitespace-nowrap">
+                    <Plus size={14} className="md:w-[18px] md:h-[18px]" />
+                    New Post
+                </Link>
+              </div>
           </RoleGate>
         }
       />

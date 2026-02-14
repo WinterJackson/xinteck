@@ -103,27 +103,6 @@ export async function createBlogPost(data: any) {
     const user = await requireRole([Role.ADMIN, Role.SUPER_ADMIN]);
     const parsed = blogPostSchema.parse(data);
 
-    // Resolve Category ID
-    let categoryId = null;
-    if (data.category) {
-        // Find existing or use default?
-        // For now assume category name matches. 
-        // Ideally we select from IDs, but UI sends string names.
-        // We'll try to find by name, if not exists, create?
-        const cat = await prisma.blogCategory.findUnique({ where: { name: data.category } });
-        if (cat) categoryId = cat.id;
-        else {
-            // Create on fly?
-            const newCat = await prisma.blogCategory.create({
-                data: {
-                    name: data.category,
-                    slug: data.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-                }
-            });
-            categoryId = newCat.id;
-        }
-    }
-
     const post = await prisma.blogPost.create({
         data: {
             title: data.title,
@@ -132,8 +111,16 @@ export async function createBlogPost(data: any) {
             content: data.content,
             featuredImage: data.image,
             status: parseStatus(data.status),
-            categoryId,
-            authorId: user.id
+            author: { connect: { id: user.id } },
+            category: data.category ? {
+                connectOrCreate: {
+                    where: { name: data.category },
+                    create: {
+                        name: data.category,
+                        slug: data.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+                    }
+                }
+            } : undefined
         }
     });
 
@@ -154,13 +141,6 @@ export async function updateBlogPost(id: string, data: any) {
     const validatedId = uuidSchema.parse(id);
     const parsed = blogPostSchema.partial().parse(data);
 
-    // Resolve Category ID (same logic)
-    let categoryId = undefined;
-    if (data.category) {
-        const cat = await prisma.blogCategory.findUnique({ where: { name: data.category } });
-        if (cat) categoryId = cat.id;
-    }
-
     // Optimistic locking (Phase 3)
     const currentVersion = data.version;
 
@@ -177,7 +157,15 @@ export async function updateBlogPost(id: string, data: any) {
                 content: data.content,
                 featuredImage: data.image,
                 status: parseStatus(data.status),
-                ...(categoryId && { categoryId }),
+                category: data.category ? {
+                    connectOrCreate: {
+                        where: { name: data.category },
+                        create: {
+                            name: data.category,
+                            slug: data.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+                        }
+                    }
+                } : undefined,
                 version: { increment: 1 }
             }
         });

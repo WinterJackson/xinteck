@@ -23,6 +23,7 @@ export interface SettingsState {
     resendFromEmail?: string;
     resendToEmail?: string;
     vercelOidcToken?: string;
+    geminiApiKey?: string;
     envStatus?: EnvStatus;
 }
 
@@ -39,7 +40,9 @@ export async function getSettings(showSecrets = false): Promise<SettingsState> {
                     "RESEND_API_KEY",
                     "RESEND_FROM_EMAIL",
                     "RESEND_TO_EMAIL",
-                    "VERCEL_OIDC_TOKEN"
+                    "RESEND_TO_EMAIL",
+                    "VERCEL_OIDC_TOKEN",
+                    "GEMINI_API_KEY"
                 ]
             }
         }
@@ -77,6 +80,7 @@ export async function getSettings(showSecrets = false): Promise<SettingsState> {
             case "RESEND_FROM_EMAIL": settings.resendFromEmail = value; break;
             case "RESEND_TO_EMAIL": settings.resendToEmail = value; break;
             case "VERCEL_OIDC_TOKEN": settings.vercelOidcToken = value; break;
+            case "GEMINI_API_KEY": settings.geminiApiKey = value; break;
         }
     }
 
@@ -88,6 +92,7 @@ export async function getSettings(showSecrets = false): Promise<SettingsState> {
     if (!settings.resendFromEmail) settings.resendFromEmail = process.env.RESEND_FROM_EMAIL || "";
     if (!settings.resendToEmail) settings.resendToEmail = process.env.RESEND_TO_EMAIL || "";
     if (!settings.vercelOidcToken) settings.vercelOidcToken = process.env.VERCEL_OIDC_TOKEN ? mask(process.env.VERCEL_OIDC_TOKEN) : "";
+    if (!settings.geminiApiKey) settings.geminiApiKey = process.env.GEMINI_API_KEY ? mask(process.env.GEMINI_API_KEY) : "";
 
     // Env Status
     settings.envStatus = {
@@ -144,6 +149,7 @@ export async function updateSettings(data: SettingsState) {
     await save("RESEND_FROM_EMAIL", data.resendFromEmail);
     await save("RESEND_TO_EMAIL", data.resendToEmail);
     await save("VERCEL_OIDC_TOKEN", data.vercelOidcToken);
+    await save("GEMINI_API_KEY", data.geminiApiKey);
 
     await logAudit({
         action: "secret_update",

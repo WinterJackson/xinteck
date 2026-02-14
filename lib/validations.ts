@@ -174,4 +174,5 @@ export const settingsStateSchema = z.object({
     resendFromEmail: z.string().trim().email().optional().or(z.literal("")),
     resendToEmail: z.string().trim().email().optional().or(z.literal("")),
     vercelOidcToken: z.string().trim().optional(),
+    geminiApiKey: z.string().trim().optional(),
 });

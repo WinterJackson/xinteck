@@ -133,6 +133,21 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                 </div>
                             </div>
 
+                            {/* AI Section */}
+                            <div className="flex flex-col gap-4">
+                                <h3 className="text-white/60 font-bold text-xs uppercase tracking-widest pl-2 border-l-2 border-purple-500/50">Artificial Intelligence</h3>
+                                <SecretCard 
+                                    title="Gemini API Key" 
+                                    description="Required for the AI Blog Assistant. Get a free API key from Google AI Studio."
+                                    placeholder="AIzaSy..."
+                                    value={formData.geminiApiKey}
+                                    onChange={(val) => handleChange("geminiApiKey", val)}
+                                    docsLink="https://aistudio.google.com/app/apikey"
+                                    docsLabel="Get API Key"
+                                    isSaved={!!initialSettings.geminiApiKey}
+                                />
+                            </div>
+
                             {/* Cloudinary Section */}
                              <div className="flex flex-col gap-4">
                                 <h3 className="text-white/60 font-bold text-xs uppercase tracking-widest pl-2 border-l-2 border-blue-500/50">Media Storage (Cloudinary)</h3>

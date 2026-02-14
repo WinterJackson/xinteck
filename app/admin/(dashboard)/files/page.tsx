@@ -21,14 +21,13 @@ export default async function FilesPage({
   
   const isFilterMode = type && type !== "all";
   
-  let folders: any[] = [];
-  
   // Only fetch folders in Navigation Mode (and if not searching, assuming search flattens everything or search doesn't match folders yet)
-  if (!isFilterMode && !search) {
-     folders = await getFolders(folderId);
-  }
-
-  const result = await getMediaFiles({ page, pageSize: limit, search, type, folderId });
+  const foldersPromise = (!isFilterMode && !search) ? getFolders(folderId) : Promise.resolve([]);
+  
+  const [folders, result] = await Promise.all([
+      foldersPromise,
+      getMediaFiles({ page, pageSize: limit, search, type, folderId })
+  ]);
   
   return (
     <FileManagerClient 

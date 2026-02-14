@@ -436,3 +436,36 @@ enum NotificationPriority {
   NORMAL
   LOW
 }
+
+// ═══════════════════════════════════════════════════════════════
+// AI BLOG ASSISTANT
+// ═══════════════════════════════════════════════════════════════
+
+model BlogIdea {
+  id          String   @id @default(cuid())
+  title       String
+  angle       String   @db.Text // The specific "hook"
+  keywords    String[] 
+  
+  // Scoring Metadata
+  score       Int      // The Final Score (0-100)
+  scoreDebug  Json?    // Breakdown: { relevance: 80, seo: 90, ... }
+  
+  status      IdeaStatus @default(NEW)
+  
+  // Relations
+  generatedPostId String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([score])
+}
+
+enum IdeaStatus {
+  NEW
+  APPROVED
+  REJECTED
+  DRAFTED
+}
